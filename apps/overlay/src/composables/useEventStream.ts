@@ -10,32 +10,47 @@ export function useEventStream(onEvent: (event: OverlayEvent) => void) {
   let socket: WebSocket | undefined;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let attempts = 0;
+  let disposed = false;
 
   const url = import.meta.env.VITE_RELAY_URL ?? "ws://localhost:8787/events";
 
   const connect = (): void => {
-    socket = new WebSocket(url);
-    socket.addEventListener("open", () => { connected.value = true; attempts = 0; });
-    socket.addEventListener("message", (message) => {
+    if (disposed) return;
+    const nextSocket = new WebSocket(url);
+    socket = nextSocket;
+    nextSocket.addEventListener("open", () => {
+      if (disposed || socket !== nextSocket) return;
+      connected.value = true;
+      attempts = 0;
+    });
+    nextSocket.addEventListener("message", (message) => {
       try {
         const parsed: unknown = JSON.parse(String(message.data));
-        if (isOverlayEvent(parsed)) onEvent(parsed);
+        if (!disposed && isOverlayEvent(parsed)) onEvent(parsed);
       } catch { /* Ignore malformed network payloads. */ }
     });
-    socket.addEventListener("close", scheduleReconnect);
-    socket.addEventListener("error", () => socket?.close());
+    nextSocket.addEventListener("close", () => {
+      if (socket === nextSocket) scheduleReconnect();
+    });
+    nextSocket.addEventListener("error", () => nextSocket.close());
   };
 
   const scheduleReconnect = (): void => {
+    if (disposed || reconnectTimer) return;
     connected.value = false;
     const delay = Math.min(500 * (2 ** attempts), maxReconnectDelay);
     attempts += 1;
-    reconnectTimer = setTimeout(connect, delay);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      connect();
+    }, delay);
   };
 
   connect();
   onBeforeUnmount(() => {
+    disposed = true;
     if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
     socket?.close();
   });
 

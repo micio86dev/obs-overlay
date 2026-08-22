@@ -30,10 +30,20 @@ export type OverlayEvent = ChatEvent | SubscriberEvent | SuperChatEvent;
 export function isOverlayEvent(value: unknown): value is OverlayEvent {
   if (!value || typeof value !== "object") return false;
   const event = value as Partial<OverlayEvent>;
-  return typeof event.id === "string"
+  const hasBaseShape = typeof event.id === "string"
     && typeof event.author === "string"
     && typeof event.occurredAt === "string"
-    && (event.type === "chat" || event.type === "subscriber" || event.type === "superchat");
+    && !Number.isNaN(Date.parse(event.occurredAt));
+  if (!hasBaseShape) return false;
+
+  if (event.type === "chat") return typeof event.message === "string";
+  if (event.type === "subscriber") return event.message === undefined || typeof event.message === "string";
+  if (event.type === "superchat") {
+    return typeof event.amount === "string"
+      && typeof event.currency === "string"
+      && typeof event.message === "string";
+  }
+  return false;
 }
 
 export function createMockEvent(type: OverlayEventType, sequence: number): OverlayEvent {

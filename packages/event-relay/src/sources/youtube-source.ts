@@ -1,5 +1,8 @@
-import type { OverlayEvent } from "@miciodev/shared-types";
+import { isOverlayEvent, type OverlayEvent } from "@miciodev/shared-types";
 import type { EventListener, EventSource } from "./mock-source.js";
+
+const minimumPollIntervalMs = 1_000;
+const maximumPollIntervalMs = 60_000;
 
 type YouTubeMessage = {
   id: string;
@@ -12,16 +15,26 @@ type YouTubeMessage = {
   authorDetails?: { displayName?: string; profileImageUrl?: string };
 };
 
+export function clampPollInterval(value: number, fallback = 10_000): number {
+  const safeFallback = Number.isFinite(fallback) ? fallback : 10_000;
+  const candidate = Number.isFinite(value) ? value : safeFallback;
+  return Math.min(Math.max(candidate, minimumPollIntervalMs), maximumPollIntervalMs);
+}
+
 export class YouTubeSource implements EventSource {
   private listeners = new Set<EventListener>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private seenMessageIds = new Set<string>();
+  private running = false;
+  private readonly pollIntervalMs: number;
 
   public constructor(
     private readonly apiKey: string,
     private readonly liveChatId: string,
-    private readonly intervalMs = 10_000,
-  ) {}
+    intervalMs = 10_000,
+  ) {
+    this.pollIntervalMs = clampPollInterval(intervalMs);
+  }
 
   public subscribe(listener: EventListener): () => void {
     this.listeners.add(listener);
@@ -29,10 +42,14 @@ export class YouTubeSource implements EventSource {
   }
 
   public start(): void {
+    if (this.running) return;
+    this.running = true;
     void this.poll();
   }
 
   public stop(): void {
+    if (!this.running) return;
+    this.running = false;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
   }
@@ -47,20 +64,23 @@ export class YouTubeSource implements EventSource {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`YouTube API returned ${response.status}`);
       const payload = await response.json() as { items?: YouTubeMessage[]; pollingIntervalMillis?: number };
+      if (!this.running) return;
       payload.items?.forEach((message) => this.publish(this.normalize(message)));
-      this.schedule(payload.pollingIntervalMillis ?? this.intervalMs);
+      this.schedule(payload.pollingIntervalMillis ?? this.pollIntervalMs);
     } catch (error) {
+      if (!this.running) return;
       console.error("YouTube polling failed; retrying", error);
-      this.schedule(this.intervalMs);
+      this.schedule(this.pollIntervalMs);
     }
   }
 
   private schedule(delay: number): void {
-    this.timer = setTimeout(() => void this.poll(), Math.max(delay, this.intervalMs));
+    if (!this.running) return;
+    this.timer = setTimeout(() => void this.poll(), clampPollInterval(delay, this.pollIntervalMs));
   }
 
   private publish(event: OverlayEvent | undefined): void {
-    if (!event || this.seenMessageIds.has(event.id)) return;
+    if (!event || !isOverlayEvent(event) || this.seenMessageIds.has(event.id)) return;
     this.seenMessageIds.add(event.id);
     if (this.seenMessageIds.size > 5_000) this.seenMessageIds.delete(this.seenMessageIds.values().next().value as string);
     this.listeners.forEach((listener) => listener(event));

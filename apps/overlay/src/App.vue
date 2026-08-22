@@ -3,7 +3,7 @@ import { computed, ref } from "vue";
 import type { OverlayEvent } from "@miciodev/shared-types";
 import AlertQueue from "./components/AlertQueue.vue";
 import LiveChatFeed from "./components/LiveChatFeed.vue";
-import { useDemoEvents } from "./composables/useDemoEvents";
+import { isDemoMode, useDemoEvents } from "./composables/useDemoEvents";
 import { useEventStream } from "./composables/useEventStream";
 
 type LayoutName = "screen-webcam" | "screen-only" | "webcam-only";
@@ -17,8 +17,10 @@ function receive(event: OverlayEvent): void {
   events.value = [...events.value, event].slice(-30);
 }
 
-const { status } = useEventStream(receive);
-const { enabled: demoMode } = useDemoEvents(receive);
+const demoMode = isDemoMode();
+const stream = demoMode ? undefined : useEventStream(receive);
+if (demoMode) useDemoEvents(receive);
+const status = stream?.status ?? computed(() => "DEMO MODE");
 const layoutTitle = computed(() => layout.replaceAll("-", " · ").toUpperCase());
 </script>
 

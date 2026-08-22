@@ -15,3 +15,6 @@ This file records decisions made without pausing for input, as requested.
 11. **Minimal toolchain.** Vue/Vite, TypeScript, `ws`, ESLint, and `tsx` are the only build/runtime tools; no state, UI, or animation framework is needed.
 12. **Audio policy degrades gracefully.** Alert visuals still run when an OBS browser instance blocks Web Audio until its own autoplay policy allows it.
 13. **No CREDITS.md.** This project uses no external assets; a credits file would imply third-party attributions where none exist.
+14. **Demo and relay are exclusive.** Demo mode deliberately does not open a relay socket, preventing duplicated or colliding stream events.
+15. **Loopback relay default.** The relay binds to `127.0.0.1` unless `HOST` is explicitly changed; a stream overlay should not expose its event endpoint on a network by accident.
+16. **Defensive runtime contract.** All incoming browser and source events are checked against type-specific payload requirements, while source start/stop calls are safe to repeat.

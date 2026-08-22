@@ -13,7 +13,7 @@ pnpm dev:relay
 pnpm dev
 ```
 
-The overlay starts with synthetic UI events unless `VITE_DEMO_MODE=false`; the relay separately defaults to `MockSource`, so both paths work without any service credentials.
+The overlay runs **one event source at a time**: it starts with synthetic UI events unless `VITE_DEMO_MODE=false`. With demo mode disabled, it connects to the relay, which separately defaults to `MockSource`; both paths need no service credentials.
 
 ## OBS Browser Source
 
@@ -33,7 +33,7 @@ Enable “Refresh browser when scene becomes active”. The **SCREEN CAPTURE** a
 pnpm dev:relay
 ```
 
-The relay listens on `ws://localhost:8787/events` and provides `GET /health`. `MockSource` emits normalized chat, subscriber, and super-chat events by default. To route the browser to it instead of local demo events, create `apps/overlay/.env.local`:
+The relay binds to `127.0.0.1` by default, listens on `ws://localhost:8787/events`, and provides `GET /health`. It is intentionally not reachable from the network unless you explicitly set `HOST=0.0.0.0` behind a trusted network boundary. `MockSource` emits normalized chat, subscriber, and super-chat events by default. To route the browser to it instead of local demo events, create `apps/overlay/.env.local`:
 
 ```dotenv
 VITE_DEMO_MODE=false
@@ -42,7 +42,7 @@ VITE_RELAY_URL=ws://localhost:8787/events
 
 ### YouTube Live Chat
 
-Copy `packages/event-relay/.env.example` to `.env` (or export the variables), set `EVENT_SOURCE=youtube`, then add `YOUTUBE_API_KEY` and `YOUTUBE_LIVE_CHAT_ID`. `YouTubeSource` polls `liveChatMessages.list`, follows the API polling interval while never polling faster than the configured quota-safe interval, and de-duplicates message IDs. A live YouTube credential is intentionally not required for development or CI.
+Copy `packages/event-relay/.env.example` to `.env` (or export the variables), set `EVENT_SOURCE=youtube`, then add `YOUTUBE_API_KEY` and `YOUTUBE_LIVE_CHAT_ID`. `YouTubeSource` polls `liveChatMessages.list`, clamps polling to a quota-safe range, de-duplicates message IDs, and discards malformed normalized payloads. A live YouTube credential is intentionally not required for development or CI.
 
 ## Architecture
 

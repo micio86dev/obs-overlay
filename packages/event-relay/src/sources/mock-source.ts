@@ -12,6 +12,7 @@ export class MockSource implements EventSource {
   private listeners = new Set<EventListener>();
   private timer: ReturnType<typeof setInterval> | undefined;
   private sequence = 0;
+  private running = false;
   private readonly eventTypes: OverlayEventType[] = ["chat", "subscriber", "superchat"];
 
   public constructor(private readonly intervalMs = 8_000) {}
@@ -22,11 +23,15 @@ export class MockSource implements EventSource {
   }
 
   public start(): void {
+    if (this.running) return;
+    this.running = true;
     this.emitNext();
     this.timer = setInterval(() => this.emitNext(), this.intervalMs);
   }
 
   public stop(): void {
+    if (!this.running) return;
+    this.running = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
   }

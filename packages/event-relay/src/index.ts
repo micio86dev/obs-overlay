@@ -17,16 +17,18 @@ function loadDotenv(): void {
 
 loadDotenv();
 const port = Number(process.env.PORT ?? 8787);
+const host = process.env.HOST || "127.0.0.1";
 const sourceName = process.env.EVENT_SOURCE ?? "mock";
 
 function createSource(): EventSource {
+  if (sourceName === "mock") return new MockSource(Number(process.env.MOCK_INTERVAL_MS ?? 8_000));
   if (sourceName === "youtube") {
     const apiKey = process.env.YOUTUBE_API_KEY;
     const liveChatId = process.env.YOUTUBE_LIVE_CHAT_ID;
     if (!apiKey || !liveChatId) throw new Error("YOUTUBE_API_KEY and YOUTUBE_LIVE_CHAT_ID are required for EVENT_SOURCE=youtube");
     return new YouTubeSource(apiKey, liveChatId, Number(process.env.POLL_INTERVAL_MS ?? 10_000));
   }
-  return new MockSource(Number(process.env.MOCK_INTERVAL_MS ?? 8_000));
+  throw new Error(`Unsupported EVENT_SOURCE: ${sourceName}. Use mock or youtube.`);
 }
 
 const server = createServer((request, response) => {
@@ -49,10 +51,14 @@ source.subscribe((event: OverlayEvent) => {
 });
 source.start();
 
-server.listen(port, () => console.log(`Event relay (${sourceName}) listening on http://localhost:${port}`));
+server.listen(port, host, () => console.log(`Event relay (${sourceName}) listening on http://${host}:${port}`));
 
+let shuttingDown = false;
 function shutdown(): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
   source.stop();
+  websocketServer.clients.forEach((client) => client.close(1001, "Server shutting down"));
   websocketServer.close();
   server.close();
 }
