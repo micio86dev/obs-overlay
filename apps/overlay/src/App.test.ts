@@ -1,4 +1,4 @@
-import { computed, createSSRApp, defineComponent, ssrContextKey } from "vue";
+import { computed, createSSRApp, defineComponent, h, ssrContextKey } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 interface RenderContext {
@@ -21,11 +21,13 @@ interface RenderedApp {
 }
 
 const EmptyComponent = defineComponent({ name: "EmptyComponent", setup: () => () => null });
+const QuizBoardComponent = defineComponent({ name: "QuizBoardComponent", setup: () => () => h("section", { "aria-label": "Python quiz board" }) });
 
 async function renderOverlay(demoMode: boolean): Promise<string> {
   vi.resetModules();
   vi.doMock("./components/AlertQueue.vue", () => ({ default: EmptyComponent }));
   vi.doMock("./components/LiveChatFeed.vue", () => ({ default: EmptyComponent }));
+  vi.doMock("./components/PythonQuizBoard.vue", () => ({ default: QuizBoardComponent }));
   vi.doMock("./composables/useDemoEvents", () => ({ isDemoMode: () => demoMode, useDemoEvents: vi.fn() }));
   vi.doMock("./composables/useEventStream", () => ({ useEventStream: () => ({ status: computed(() => "LIVE") }) }));
 
@@ -42,6 +44,7 @@ async function renderOverlay(demoMode: boolean): Promise<string> {
 afterEach(() => {
   vi.doUnmock("./components/AlertQueue.vue");
   vi.doUnmock("./components/LiveChatFeed.vue");
+  vi.doUnmock("./components/PythonQuizBoard.vue");
   vi.doUnmock("./composables/useDemoEvents");
   vi.doUnmock("./composables/useEventStream");
   vi.unstubAllGlobals();
@@ -60,7 +63,7 @@ describe("overlay branding", () => {
     expect(output).toContain('class="logo-frame" role="img" aria-label="Logo placement"');
   });
 
-  it("hides placement placeholders and logo semantics in live mode", async () => {
+  it("hides placement placeholders while preserving logo placement semantics in live mode", async () => {
     vi.stubGlobal("window", { location: { search: "" } });
     const output = await renderOverlay(false);
 
@@ -70,13 +73,12 @@ describe("overlay branding", () => {
     expect(output).not.toContain("LOGO");
     expect(output).not.toContain("SCREEN CAPTURE");
     expect(output).not.toContain("WEBCAM");
-    expect(output).not.toContain('role="img"');
-    expect(output).not.toContain('aria-label="Logo placement"');
+    expect(output).toContain('class="logo-frame" role="img" aria-label="Logo placement"');
     expect(output).not.toContain('aria-label="Screen capture placement"');
     expect(output).toContain('aria-hidden="true"');
   });
 
-  it("renders the near-fullscreen screen-camera layout without a webcam frame", async () => {
+  it("renders the near-fullscreen screen-camera layout with only one large placement frame", async () => {
     vi.stubGlobal("window", { location: { search: "?layout=screen-camera" } });
     const output = await renderOverlay(true);
 
@@ -84,6 +86,37 @@ describe("overlay branding", () => {
     expect(output).toContain('class="slot screen-slot"');
     expect(output).not.toContain('class="slot webcam-slot"');
     expect(output).toContain('class="feed"');
+  });
+
+  it("routes python-quiz to an autonomous quiz board while retaining the webcam placement", async () => {
+    vi.stubGlobal("window", { location: { search: "?layout=python-quiz" } });
+    const output = await renderOverlay(true);
+
+    expect(output).toContain('class="overlay layout-python-quiz demo"');
+    expect(output).toContain('aria-label="Python quiz board"');
+    expect(output).toContain('class="slot webcam-slot"');
+    expect(output).not.toContain('class="slot screen-slot"');
+  });
+
+  it("keeps transparent OBS placement frames visible in every applicable live layout", async () => {
+    const expectedSlots = [
+      { query: "?layout=screen-webcam", screen: true, webcam: true },
+      { query: "?layout=screen-only", screen: true, webcam: false },
+      { query: "?layout=webcam-only", screen: false, webcam: true },
+      { query: "?layout=screen-camera", screen: true, webcam: false },
+    ];
+
+    for (const expected of expectedSlots) {
+      vi.stubGlobal("window", { location: { search: expected.query } });
+      const output = await renderOverlay(false);
+
+      expect(output).toContain('class="logo-frame"');
+      expect(output.includes('class="slot screen-slot"')).toBe(expected.screen);
+      expect(output.includes('class="slot webcam-slot"')).toBe(expected.webcam);
+      expect(output).not.toContain("SCREEN CAPTURE");
+      expect(output).not.toContain("WEBCAM");
+      expect(output).not.toContain("LOGO");
+    }
   });
 
   it("falls back to the screen-webcam layout for empty and invalid layout values", async () => {

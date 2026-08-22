@@ -5,6 +5,8 @@ export interface OverlayEventBase {
   type: OverlayEventType;
   occurredAt: string;
   author: string;
+  /** Relay-internal provider identity; must be replaced before browser broadcast. */
+  authorId?: string;
   avatarUrl?: string;
 }
 
@@ -36,7 +38,8 @@ export function isOverlayEvent(value: unknown): value is OverlayEvent {
     && !Number.isNaN(Date.parse(event.occurredAt));
   if (!hasBaseShape) return false;
 
-  if (event.type === "chat") return typeof event.message === "string";
+  if (event.type === "chat") return typeof event.message === "string"
+    && (event.authorId === undefined || typeof event.authorId === "string");
   if (event.type === "subscriber") return event.message === undefined || typeof event.message === "string";
   if (event.type === "superchat") {
     return typeof event.amount === "string"

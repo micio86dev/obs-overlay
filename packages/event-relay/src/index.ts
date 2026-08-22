@@ -4,6 +4,10 @@ import { resolve } from "node:path";
 import { WebSocketServer } from "ws";
 import type { OverlayEvent } from "@miciodev/shared-types";
 import { parseBoundedInteger } from "./config.js";
+import { ParticipantIdentityMapper } from "./participant-identity.js";
+import { createQuizRequestHandler } from "./quiz-api.js";
+import { QuizGame } from "./quiz-game.js";
+import { openQuizQuestionRepository } from "./quiz-repository.js";
 import { gracefulShutdownRelay } from "./shutdown.js";
 import { createEventSource } from "./source-selection.js";
 
@@ -21,8 +25,14 @@ const port = parseBoundedInteger(process.env.PORT, { name: "PORT", fallback: 878
 const host = process.env.HOST || "127.0.0.1";
 const sourceName = process.env.EVENT_SOURCE ?? "none";
 const mockIntervalMs = parseBoundedInteger(process.env.MOCK_INTERVAL_MS, { name: "MOCK_INTERVAL_MS", fallback: 8_000, minimum: 1_000, maximum: 60_000 });
+const quizRepository = openQuizQuestionRepository();
+const participantIds = new ParticipantIdentityMapper();
+const quizGame = new QuizGame({ questions: quizRepository.listQuestions(), onRoundStart: () => participantIds.startRound() });
+quizGame.start();
+const handleQuizRequest = createQuizRequestHandler(quizGame);
 
 const server = createServer((request, response) => {
+  if (handleQuizRequest(request, response)) return;
   if (request.url === "/health") {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ status: "ok", source: sourceName }));
@@ -43,7 +53,9 @@ const source = createEventSource({
   pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 10_000),
 });
 source.subscribe((event: OverlayEvent) => {
-  const message = JSON.stringify(event);
+  const publicEvent = participantIds.map(event);
+  if (publicEvent.type === "chat") quizGame.submit(publicEvent);
+  const message = JSON.stringify(publicEvent);
   websocketServer.clients.forEach((client) => {
     if (client.readyState === client.OPEN) client.send(message);
   });
@@ -63,6 +75,8 @@ async function shutdown(): Promise<void> {
     closeHttpServer: (done) => server.close(() => done()),
     forceCloseHttpConnections: () => server.closeAllConnections(),
   });
+  quizGame.stop();
+  quizRepository.close();
 }
 process.on("SIGINT", () => void shutdown());
 process.on("SIGTERM", () => void shutdown());

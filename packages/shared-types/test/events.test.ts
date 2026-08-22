@@ -15,3 +15,8 @@ test("runtime validation rejects payloads missing discriminated fields", () => {
   assert.equal(isOverlayEvent({ id: "2", type: "superchat", occurredAt: "2026-01-01T00:00:00.000Z", author: "viewer", amount: "€5" }), false);
   assert.equal(isOverlayEvent({ id: "3", type: "subscriber", occurredAt: "invalid", author: "viewer", message: 42 }), false);
 });
+
+test("chat events accept an optional stable author identity and reject invalid identities", () => {
+  assert.equal(isOverlayEvent({ id: "4", type: "chat", occurredAt: "2026-01-01T00:00:00.000Z", author: "viewer", authorId: "channel-1", message: "1" }), true);
+  assert.equal(isOverlayEvent({ id: "5", type: "chat", occurredAt: "2026-01-01T00:00:00.000Z", author: "viewer", authorId: 42, message: "1" }), false);
+});

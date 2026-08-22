@@ -3,7 +3,8 @@ builder = "RAILPACK"
 buildCommand = "pnpm --filter @miciodev/shared-types build && pnpm --filter @miciodev/event-relay build"
 
 [deploy]
-startCommand = "HOST=0.0.0.0 node packages/event-relay/dist/index.js"
+# The Railway volume must be attached at /app/data; SQLite is opened only at runtime.
+startCommand = "QUIZ_DATABASE_PATH=/app/data/quiz.sqlite QUIZ_REQUIRE_VOLUME=true HOST=0.0.0.0 node packages/event-relay/dist/index.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"

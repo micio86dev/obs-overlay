@@ -133,6 +133,8 @@ Set the overlay values in `apps/overlay/.env.local`:
 ```dotenv
 VITE_DEMO_MODE=false
 VITE_RELAY_URL=ws://localhost:8787/events
+# Optional; normally derived from VITE_RELAY_URL.
+VITE_QUIZ_API_URL=http://localhost:8787/quiz/state
 ```
 
 Set the relay values in `packages/event-relay/.env`:
@@ -140,6 +142,7 @@ Set the relay values in `packages/event-relay/.env`:
 ```dotenv
 EVENT_SOURCE=youtube
 MOCK_SOURCE_ENABLED=false
+QUIZ_DATABASE_PATH=./data/quiz.sqlite
 YOUTUBE_API_KEY=YOUR_YOUTUBE_DATA_API_KEY
 YOUTUBE_CHANNEL_HANDLE=miciodev
 POLL_INTERVAL_MS=10000
@@ -209,10 +212,17 @@ The relay listens on `127.0.0.1:8787` by default and exposes:
 
 - WebSocket: `ws://localhost:8787/events`
 - Health check: `http://localhost:8787/health`
+- Read-only public quiz state: `http://localhost:8787/quiz/state`
 
 Set `HOST=0.0.0.0` only when a trusted network boundary is in place. `PORT` accepts integers from 1 to 65535; `MOCK_INTERVAL_MS` accepts 1000 to 60000 milliseconds. Invalid explicit values fail at startup.
 
 Never commit API keys. `.env` and `.env.local` are ignored by Git; commit only the provided `.env.example` templates with placeholder values. If a key is exposed, revoke it in Google Cloud and create a replacement immediately.
+
+### Railway SQLite volume (required for production quiz data)
+
+The relay seeds exactly 100 versioned Python questions into SQLite at startup and exposes them read-only to the static overlay. Attach **one Railway Volume** to the relay service at `/app/data`, then set `QUIZ_DATABASE_PATH=/app/data/quiz.sqlite` (the tracked `railway.toml` start command already supplies this value). Railway mounts volumes only at runtime, so do not run database initialization as a build or pre-deploy command.
+
+The relay owns the shared 10-question round, timing, scoring, and answer reveal. The Vercel overlay derives `https://…/quiz/state` from `VITE_RELAY_URL` by default; set `VITE_QUIZ_API_URL` only when the HTTP API uses a different public origin. The CORS-enabled API never reveals the correct answer during a question. Viewer scores are retained only for the active relay process; only the question bank is stored in SQLite.
 
 ## Verification
 

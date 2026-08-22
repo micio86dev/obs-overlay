@@ -15,7 +15,7 @@ type YouTubeMessage = {
     displayMessage?: string;
     superChatDetails?: { amountDisplayString?: string; currency?: string; userComment?: string };
   };
-  authorDetails?: { displayName?: string; profileImageUrl?: string };
+  authorDetails?: { channelId?: string; displayName?: string; profileImageUrl?: string };
 };
 
 const youtubeApiBaseUrl = "https://www.googleapis.com/youtube/v3";
@@ -105,6 +105,7 @@ function isYouTubeMessage(value: unknown): value is YouTubeMessage {
   if (!isRecord(value) || typeof value.id !== "string" || !isRecord(value.snippet)) return false;
   if (value.authorDetails !== undefined && (!isRecord(value.authorDetails)
     || !hasOptionalString(value.authorDetails.displayName)
+    || !hasOptionalString(value.authorDetails.channelId)
     || !hasOptionalString(value.authorDetails.profileImageUrl))) return false;
   const { snippet } = value;
   if ((snippet.type !== "textMessageEvent" && snippet.type !== "newSponsorEvent" && snippet.type !== "superChatEvent")
@@ -289,6 +290,7 @@ export class YouTubeSource implements EventSource {
       id: message.id,
       occurredAt: message.snippet.publishedAt,
       author: message.authorDetails?.displayName ?? "YouTube viewer",
+      authorId: message.authorDetails?.channelId,
       avatarUrl: message.authorDetails?.profileImageUrl
     };
     if (message.snippet.type === "textMessageEvent") return { ...base, type: "chat", message: message.snippet.displayMessage ?? "" };

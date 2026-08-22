@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { OverlayEvent } from "@miciodev/shared-types";
 import { MockSource } from "../src/sources/mock-source.ts";
 import {
   clampPollInterval,
@@ -270,6 +271,31 @@ test("YouTubeSource skips malformed entries while publishing valid entries from 
   } finally {
     globalThis.fetch = originalFetch;
     console.warn = originalConsoleWarn;
+  }
+});
+
+test("YouTubeSource preserves the YouTube channel ID as the stable chat author identity", async () => {
+  const originalFetch = globalThis.fetch;
+  const received: OverlayEvent[] = [];
+  globalThis.fetch = (() => Promise.resolve(new Response(JSON.stringify({
+    items: [{
+      id: "chat-with-channel-id",
+      snippet: { type: "textMessageEvent", publishedAt: "2026-08-22T00:00:00.000Z", displayMessage: "1" },
+      authorDetails: { channelId: "youtube-channel-42", displayName: "MicioFan" },
+    }],
+    pollingIntervalMillis: 60_000,
+  }), { status: 200 }))) as typeof fetch;
+
+  try {
+    const source = new YouTubeSource("key", "chat");
+    source.subscribe((event) => received.push(event));
+    source.start();
+    await new Promise<void>((resolve) => originalFetch === globalThis.fetch ? resolve() : setTimeout(resolve, 0));
+    assert.equal(received[0]?.type, "chat");
+    assert.equal(received[0]?.authorId, "youtube-channel-42");
+    source.stop();
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
