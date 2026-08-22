@@ -33,7 +33,7 @@ Enable “Refresh browser when scene becomes active”. The **SCREEN CAPTURE** a
 pnpm dev:relay
 ```
 
-The relay binds to `127.0.0.1` by default, listens on `ws://localhost:8787/events`, and provides `GET /health`. It is intentionally not reachable from the network unless you explicitly set `HOST=0.0.0.0` behind a trusted network boundary. `MockSource` emits normalized chat, subscriber, and super-chat events by default. To route the browser to it instead of local demo events, create `apps/overlay/.env.local`:
+The relay binds to `127.0.0.1` by default, listens on `ws://localhost:8787/events`, and provides `GET /health`. It is intentionally not reachable from the network unless you explicitly set `HOST=0.0.0.0` behind a trusted network boundary. `PORT` must be an integer from 1–65535 and `MOCK_INTERVAL_MS` from 1000–60000; invalid explicit values fail at startup rather than creating an unstable relay. `MockSource` emits normalized chat, subscriber, and super-chat events by default. To route the browser to it instead of local demo events, create `apps/overlay/.env.local`:
 
 ```dotenv
 VITE_DEMO_MODE=false
@@ -42,7 +42,7 @@ VITE_RELAY_URL=ws://localhost:8787/events
 
 ### YouTube Live Chat
 
-Copy `packages/event-relay/.env.example` to `.env` (or export the variables), set `EVENT_SOURCE=youtube`, then add `YOUTUBE_API_KEY` and `YOUTUBE_LIVE_CHAT_ID`. `YouTubeSource` polls `liveChatMessages.list`, clamps polling to a quota-safe range, de-duplicates message IDs, and discards malformed normalized payloads. A live YouTube credential is intentionally not required for development or CI.
+Copy `packages/event-relay/.env.example` to `.env` (or export the variables), set `EVENT_SOURCE=youtube`, then add `YOUTUBE_API_KEY` and `YOUTUBE_LIVE_CHAT_ID`. `YouTubeSource` polls `liveChatMessages.list`, clamps polling to a quota-safe range, de-duplicates message IDs, skips malformed API entries without discarding the rest of a poll, and aborts outstanding requests during shutdown or restart. A live YouTube credential is intentionally not required for development or CI.
 
 ## Architecture
 

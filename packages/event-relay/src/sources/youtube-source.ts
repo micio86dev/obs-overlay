@@ -15,6 +15,31 @@ type YouTubeMessage = {
   authorDetails?: { displayName?: string; profileImageUrl?: string };
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isYouTubeMessage(value: unknown): value is YouTubeMessage {
+  if (!isRecord(value) || typeof value.id !== "string" || !isRecord(value.snippet)) return false;
+  if (value.authorDetails !== undefined && (!isRecord(value.authorDetails)
+    || !hasOptionalString(value.authorDetails.displayName)
+    || !hasOptionalString(value.authorDetails.profileImageUrl))) return false;
+  const { snippet } = value;
+  if ((snippet.type !== "textMessageEvent" && snippet.type !== "newSponsorEvent" && snippet.type !== "superChatEvent")
+    || typeof snippet.publishedAt !== "string"
+    || !hasOptionalString(snippet.displayMessage)) return false;
+
+  if (snippet.superChatDetails === undefined) return true;
+  if (!isRecord(snippet.superChatDetails)) return false;
+  return hasOptionalString(snippet.superChatDetails.amountDisplayString)
+    && hasOptionalString(snippet.superChatDetails.currency)
+    && hasOptionalString(snippet.superChatDetails.userComment);
+}
+
 export function clampPollInterval(value: number, fallback = 10_000): number {
   const safeFallback = Number.isFinite(fallback) ? fallback : 10_000;
   const candidate = Number.isFinite(value) ? value : safeFallback;
@@ -26,6 +51,8 @@ export class YouTubeSource implements EventSource {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private seenMessageIds = new Set<string>();
   private running = false;
+  private generation = 0;
+  private abortController: AbortController | undefined;
   private readonly pollIntervalMs: number;
 
   public constructor(
@@ -44,39 +71,66 @@ export class YouTubeSource implements EventSource {
   public start(): void {
     if (this.running) return;
     this.running = true;
-    void this.poll();
+    this.generation += 1;
+    void this.poll(this.generation);
   }
 
   public stop(): void {
     if (!this.running) return;
     this.running = false;
+    this.generation += 1;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
+    this.abortController?.abort();
+    this.abortController = undefined;
   }
 
-  private async poll(): Promise<void> {
+  private isActive(generation: number): boolean {
+    return this.running && this.generation === generation;
+  }
+
+  private async poll(generation: number): Promise<void> {
+    if (!this.isActive(generation)) return;
+    const abortController = new AbortController();
+    this.abortController = abortController;
     try {
       const url = new URL("https://www.googleapis.com/youtube/v3/liveChat/messages");
       url.searchParams.set("liveChatId", this.liveChatId);
       url.searchParams.set("part", "id,snippet,authorDetails");
       url.searchParams.set("maxResults", "200");
       url.searchParams.set("key", this.apiKey);
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: abortController.signal });
       if (!response.ok) throw new Error(`YouTube API returned ${response.status}`);
-      const payload = await response.json() as { items?: YouTubeMessage[]; pollingIntervalMillis?: number };
-      if (!this.running) return;
-      payload.items?.forEach((message) => this.publish(this.normalize(message)));
-      this.schedule(payload.pollingIntervalMillis ?? this.pollIntervalMs);
+      const payload: unknown = await response.json();
+      if (!isRecord(payload)) throw new Error("YouTube API returned an invalid payload");
+      if (!this.isActive(generation)) return;
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      for (const item of items) {
+        if (!isYouTubeMessage(item)) {
+          console.warn("Ignoring malformed YouTube live-chat item");
+          continue;
+        }
+        try {
+          this.publish(this.normalize(item));
+        } catch (error) {
+          console.warn("Ignoring unnormalizable YouTube live-chat item", error);
+        }
+      }
+      const pollingIntervalMillis = payload.pollingIntervalMillis;
+      const delay = typeof pollingIntervalMillis === "number" ? pollingIntervalMillis : this.pollIntervalMs;
+      this.schedule(delay, generation);
     } catch (error) {
-      if (!this.running) return;
+      if (!this.isActive(generation) || abortController.signal.aborted) return;
       console.error("YouTube polling failed; retrying", error);
-      this.schedule(this.pollIntervalMs);
+      this.schedule(this.pollIntervalMs, generation);
+    } finally {
+      if (this.abortController === abortController) this.abortController = undefined;
     }
   }
 
-  private schedule(delay: number): void {
-    if (!this.running) return;
-    this.timer = setTimeout(() => void this.poll(), clampPollInterval(delay, this.pollIntervalMs));
+  private schedule(delay: number, generation: number): void {
+    if (!this.isActive(generation)) return;
+    this.timer = setTimeout(() => void this.poll(generation), clampPollInterval(delay, this.pollIntervalMs));
   }
 
   private publish(event: OverlayEvent | undefined): void {

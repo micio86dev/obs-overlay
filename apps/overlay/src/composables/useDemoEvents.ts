@@ -1,8 +1,8 @@
 import { onBeforeUnmount } from "vue";
 import { createMockEvent, type OverlayEventType } from "@miciodev/shared-types";
 
-export function isDemoMode(): boolean {
-  return import.meta.env.VITE_DEMO_MODE !== "false";
+export function isDemoMode(value = import.meta.env.VITE_DEMO_MODE): boolean {
+  return value !== "false";
 }
 
 export function useDemoEvents(onEvent: (event: ReturnType<typeof createMockEvent>) => void) {

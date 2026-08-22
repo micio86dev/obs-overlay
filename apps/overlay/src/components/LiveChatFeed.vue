@@ -2,13 +2,14 @@
 import { nextTick, ref, watch } from "vue";
 import type { ChatEvent, OverlayEvent } from "@miciodev/shared-types";
 import ChatMessage from "./ChatMessage.vue";
+import { selectChatEvents } from "../composables/live-chat";
 
 const props = withDefaults(defineProps<{ events: OverlayEvent[]; maxVisible?: number }>(), { maxVisible: 7 });
 const feed = ref<HTMLElement>();
 const visibleEvents = ref<ChatEvent[]>([]);
 
 watch(() => props.events, async (events) => {
-  visibleEvents.value = events.filter((event): event is ChatEvent => event.type === "chat").slice(-props.maxVisible);
+  visibleEvents.value = selectChatEvents(events, props.maxVisible);
   await nextTick();
   if (feed.value) feed.value.scrollTop = feed.value.scrollHeight;
 }, { deep: true, immediate: true });

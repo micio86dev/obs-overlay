@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "typecheck": "vue-tsc -b --pretty false"
+    "typecheck": "vue-tsc -b --pretty false",
+    "test": "vitest run"
   },
   "dependencies": {
     "@miciodev/shared-types": "workspace:*",
@@ -15,6 +16,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
     "vite": "^7.1.12",
+    "vitest": "^4.1.11",
     "vue-tsc": "^3.1.5"
   }
 }

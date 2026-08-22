@@ -3,6 +3,8 @@ import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { WebSocketServer } from "ws";
 import type { OverlayEvent } from "@miciodev/shared-types";
+import { parseBoundedInteger } from "./config.js";
+import { gracefulShutdownRelay } from "./shutdown.js";
 import { MockSource, type EventSource } from "./sources/mock-source.js";
 import { YouTubeSource } from "./sources/youtube-source.js";
 
@@ -16,12 +18,13 @@ function loadDotenv(): void {
 }
 
 loadDotenv();
-const port = Number(process.env.PORT ?? 8787);
+const port = parseBoundedInteger(process.env.PORT, { name: "PORT", fallback: 8787, minimum: 1, maximum: 65_535 });
 const host = process.env.HOST || "127.0.0.1";
 const sourceName = process.env.EVENT_SOURCE ?? "mock";
+const mockIntervalMs = parseBoundedInteger(process.env.MOCK_INTERVAL_MS, { name: "MOCK_INTERVAL_MS", fallback: 8_000, minimum: 1_000, maximum: 60_000 });
 
 function createSource(): EventSource {
-  if (sourceName === "mock") return new MockSource(Number(process.env.MOCK_INTERVAL_MS ?? 8_000));
+  if (sourceName === "mock") return new MockSource(mockIntervalMs);
   if (sourceName === "youtube") {
     const apiKey = process.env.YOUTUBE_API_KEY;
     const liveChatId = process.env.YOUTUBE_LIVE_CHAT_ID;
@@ -54,13 +57,16 @@ source.start();
 server.listen(port, host, () => console.log(`Event relay (${sourceName}) listening on http://${host}:${port}`));
 
 let shuttingDown = false;
-function shutdown(): void {
+async function shutdown(): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
-  source.stop();
-  websocketServer.clients.forEach((client) => client.close(1001, "Server shutting down"));
-  websocketServer.close();
-  server.close();
+  await gracefulShutdownRelay({
+    stopSource: () => source.stop(),
+    clients: websocketServer.clients,
+    closeWebSocketServer: (done) => websocketServer.close(() => done()),
+    closeHttpServer: (done) => server.close(() => done()),
+    forceCloseHttpConnections: () => server.closeAllConnections(),
+  });
 }
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => void shutdown());
+process.on("SIGTERM", () => void shutdown());
