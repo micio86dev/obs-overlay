@@ -4,6 +4,8 @@ import type { EventListener, EventSource } from "./mock-source.js";
 const minimumPollIntervalMs = 1_000;
 const maximumPollIntervalMs = 60_000;
 const defaultFetchTimeoutMs = 15_000;
+const initialDiscoveryRetryMs = 5 * 60_000;
+const maximumDiscoveryRetryMs = 60 * 60_000;
 
 type YouTubeMessage = {
   id: string;
@@ -16,12 +18,87 @@ type YouTubeMessage = {
   authorDetails?: { displayName?: string; profileImageUrl?: string };
 };
 
+const youtubeApiBaseUrl = "https://www.googleapis.com/youtube/v3";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function hasOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === "string";
+}
+
+function getString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+async function fetchYouTubePayload(url: URL, signal?: AbortSignal): Promise<Record<string, unknown>> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`YouTube API returned ${response.status}`);
+  const payload: unknown = await response.json();
+  if (!isRecord(payload)) throw new Error("YouTube API returned an invalid payload");
+  return payload;
+}
+
+export function normalizeChannelHandle(handle: string | undefined): string | undefined {
+  const normalized = handle?.trim().replace(/^@/, "");
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+/** Resolves a public channel handle to the active live broadcast's chat ID. */
+export async function discoverActiveLiveChatId(
+  apiKey: string,
+  channelHandle: string,
+  signal?: AbortSignal,
+): Promise<string | undefined> {
+  const handle = normalizeChannelHandle(channelHandle);
+  if (!handle) return undefined;
+
+  const channelUrl = new URL(`${youtubeApiBaseUrl}/channels`);
+  channelUrl.searchParams.set("part", "id");
+  channelUrl.searchParams.set("forHandle", handle);
+  channelUrl.searchParams.set("key", apiKey);
+  const channelPayload = await fetchYouTubePayload(channelUrl, signal);
+  const channelItems = Array.isArray(channelPayload.items) ? channelPayload.items : [];
+  const channelId = channelItems.length > 0 && isRecord(channelItems[0]) ? getString(channelItems[0], "id") : undefined;
+  if (!channelId) return undefined;
+
+  const searchUrl = new URL(`${youtubeApiBaseUrl}/search`);
+  searchUrl.searchParams.set("part", "id");
+  searchUrl.searchParams.set("channelId", channelId);
+  searchUrl.searchParams.set("eventType", "live");
+  searchUrl.searchParams.set("type", "video");
+  searchUrl.searchParams.set("maxResults", "1");
+  searchUrl.searchParams.set("key", apiKey);
+  const searchPayload = await fetchYouTubePayload(searchUrl, signal);
+  const searchItems = Array.isArray(searchPayload.items) ? searchPayload.items : [];
+  const firstSearchItem = searchItems.length > 0 && isRecord(searchItems[0]) ? searchItems[0] : undefined;
+  const videoId = firstSearchItem && isRecord(firstSearchItem.id) ? getString(firstSearchItem.id, "videoId") : undefined;
+  if (!videoId) return undefined;
+
+  const videoUrl = new URL(`${youtubeApiBaseUrl}/videos`);
+  videoUrl.searchParams.set("part", "liveStreamingDetails");
+  videoUrl.searchParams.set("id", videoId);
+  videoUrl.searchParams.set("key", apiKey);
+  const videoPayload = await fetchYouTubePayload(videoUrl, signal);
+  const videoItems = Array.isArray(videoPayload.items) ? videoPayload.items : [];
+  const firstVideoItem = videoItems.length > 0 && isRecord(videoItems[0]) ? videoItems[0] : undefined;
+  return firstVideoItem && isRecord(firstVideoItem.liveStreamingDetails)
+    ? getString(firstVideoItem.liveStreamingDetails, "activeLiveChatId")
+    : undefined;
+}
+
+async function isEndedLiveChatResponse(response: Response): Promise<boolean> {
+  if (response.status === 404) return true;
+  if (response.status !== 403) return false;
+  try {
+    const payload: unknown = await response.clone().json();
+    if (!isRecord(payload) || !isRecord(payload.error) || !Array.isArray(payload.error.errors)) return false;
+    return payload.error.errors.some((error) => isRecord(error) && error.reason === "liveChatEnded");
+  } catch {
+    return false;
+  }
 }
 
 function isYouTubeMessage(value: unknown): value is YouTubeMessage {
@@ -61,18 +138,25 @@ export class YouTubeSource implements EventSource {
   private abortController: AbortController | undefined;
   private requestTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
   private nextPageToken: string | undefined;
+  private discoveryRetryAttempt = 0;
   private readonly pollIntervalMs: number;
   private readonly fetchTimeoutMs: number;
 
   public constructor(
     private readonly apiKey: string,
-    private readonly liveChatId: string,
+  liveChatId: string | undefined,
     intervalMs = 10_000,
     fetchTimeoutMs = defaultFetchTimeoutMs,
+    channelHandle?: string,
   ) {
+    this.liveChatId = liveChatId;
+    this.channelHandle = normalizeChannelHandle(channelHandle);
     this.pollIntervalMs = clampPollInterval(intervalMs);
     this.fetchTimeoutMs = clampPollInterval(fetchTimeoutMs, defaultFetchTimeoutMs);
   }
+
+  private liveChatId: string | undefined;
+  private readonly channelHandle: string | undefined;
 
   public subscribe(listener: EventListener): () => void {
     this.listeners.add(listener);
@@ -84,6 +168,7 @@ export class YouTubeSource implements EventSource {
     this.running = true;
     this.generation += 1;
     this.nextPageToken = undefined;
+    this.discoveryRetryAttempt = 0;
     void this.poll(this.generation);
   }
 
@@ -113,7 +198,22 @@ export class YouTubeSource implements EventSource {
       abortController.abort();
     }, this.fetchTimeoutMs);
     this.requestTimeoutTimer = requestTimeoutTimer;
+    let resolvingLiveChat = false;
     try {
+      if (!this.liveChatId) {
+        if (!this.channelHandle) throw new Error("A YouTube live chat ID or channel handle is required");
+        resolvingLiveChat = true;
+        const liveChatId = await discoverActiveLiveChatId(this.apiKey, this.channelHandle, abortController.signal);
+        if (!this.isActive(generation)) return;
+        if (!liveChatId) {
+          console.info(`No active YouTube live found for @${this.channelHandle}; retrying`);
+          this.scheduleDiscovery(generation);
+          return;
+        }
+        this.liveChatId = liveChatId;
+        this.nextPageToken = undefined;
+        this.discoveryRetryAttempt = 0;
+      }
       const url = new URL("https://www.googleapis.com/youtube/v3/liveChat/messages");
       url.searchParams.set("liveChatId", this.liveChatId);
       url.searchParams.set("part", "id,snippet,authorDetails");
@@ -121,6 +221,13 @@ export class YouTubeSource implements EventSource {
       url.searchParams.set("key", this.apiKey);
       if (this.nextPageToken) url.searchParams.set("pageToken", this.nextPageToken);
       const response = await fetch(url, { signal: abortController.signal });
+      if (this.channelHandle && await isEndedLiveChatResponse(response)) {
+        console.info("YouTube live chat ended; looking for the next active live");
+        this.liveChatId = undefined;
+        this.nextPageToken = undefined;
+        this.scheduleDiscovery(generation);
+        return;
+      }
       if (!response.ok) throw new Error(`YouTube API returned ${response.status}`);
       const payload: unknown = await response.json();
       if (!isRecord(payload)) throw new Error("YouTube API returned an invalid payload");
@@ -146,7 +253,8 @@ export class YouTubeSource implements EventSource {
     } catch (error) {
       if (!this.isActive(generation) || (abortController.signal.aborted && !didTimeout)) return;
       console.error("YouTube polling failed; retrying", error);
-      this.schedule(this.pollIntervalMs, generation);
+      if (resolvingLiveChat) this.scheduleDiscovery(generation);
+      else this.schedule(this.pollIntervalMs, generation);
     } finally {
       clearTimeout(requestTimeoutTimer);
       if (this.requestTimeoutTimer === requestTimeoutTimer) this.requestTimeoutTimer = undefined;
@@ -154,9 +262,19 @@ export class YouTubeSource implements EventSource {
     }
   }
 
-  private schedule(delay: number, generation: number): void {
+  private schedule(delay: number, generation: number, clampDelay = true): void {
     if (!this.isActive(generation)) return;
-    this.timer = setTimeout(() => void this.poll(generation), clampPollInterval(delay, this.pollIntervalMs));
+    const scheduledDelay = clampDelay ? clampPollInterval(delay, this.pollIntervalMs) : delay;
+    this.timer = setTimeout(() => void this.poll(generation), scheduledDelay);
+  }
+
+  private scheduleDiscovery(generation: number): void {
+    const delay = Math.min(
+      initialDiscoveryRetryMs * (2 ** this.discoveryRetryAttempt),
+      maximumDiscoveryRetryMs,
+    );
+    this.discoveryRetryAttempt = Math.min(this.discoveryRetryAttempt + 1, 4);
+    this.schedule(delay, generation, false);
   }
 
   private publish(event: OverlayEvent | undefined): void {

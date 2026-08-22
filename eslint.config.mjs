@@ -18,5 +18,9 @@ export default [
     files: ["**/*.ts"],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     rules: { "@typescript-eslint/no-explicit-any": "error" }
+  },
+  {
+    files: ["**/*.{js,mjs,cjs}"],
+    languageOptions: { globals: { ...globals.node } }
   }
 ];

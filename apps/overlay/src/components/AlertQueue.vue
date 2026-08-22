@@ -2,41 +2,27 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { OverlayEvent, SuperChatEvent } from "@miciodev/shared-types";
 import NeonBurst from "./NeonBurst.vue";
+import { createAlertSoundPlayer } from "./alert-sound";
 
 const props = defineProps<{ events: OverlayEvent[] }>();
 type AlertEvent = Exclude<OverlayEvent, { type: "chat" }>;
 const queue = ref<AlertEvent[]>([]);
 const active = ref<AlertEvent>();
 let timer: ReturnType<typeof setTimeout> | undefined;
+const soundPlayer = createAlertSoundPlayer();
 
 const label = computed(() => active.value?.type === "superchat" ? "SUPER CHAT" : "NEW SUBSCRIBER");
 const superChat = computed<SuperChatEvent | undefined>(() => active.value?.type === "superchat" ? active.value : undefined);
 
-function playSound(event: OverlayEvent): void {
-  try {
-    const context = new AudioContext();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = event.type === "superchat" ? "triangle" : "sine";
-    oscillator.frequency.setValueAtTime(event.type === "superchat" ? 660 : 440, context.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(event.type === "superchat" ? 990 : 660, context.currentTime + .16);
-    gain.gain.setValueAtTime(.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(.12, context.currentTime + .02);
-    gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + .38);
-    oscillator.connect(gain).connect(context.destination);
-    void context.resume();
-    oscillator.start();
-    oscillator.stop(context.currentTime + .4);
-    oscillator.addEventListener("ended", () => void context.close());
-  } catch {
-    // A locked-down browser source still renders the alert without sound.
-  }
-}
+function unlockSound(): void { void soundPlayer.unlock(); }
+
+document.addEventListener("pointerdown", unlockSound, { once: true });
+document.addEventListener("keydown", unlockSound, { once: true });
 
 function advance(): void {
   active.value = queue.value.shift();
   if (!active.value) return;
-  playSound(active.value);
+  void soundPlayer.play(active.value);
   timer = setTimeout(advance, 4_800);
 }
 
@@ -47,7 +33,12 @@ watch(() => props.events, (events) => {
   if (!active.value) advance();
 }, { deep: true });
 
-onBeforeUnmount(() => { if (timer) clearTimeout(timer); });
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer);
+  document.removeEventListener("pointerdown", unlockSound);
+  document.removeEventListener("keydown", unlockSound);
+  soundPlayer.dispose();
+});
 </script>
 
 <template>

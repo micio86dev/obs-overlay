@@ -5,8 +5,7 @@ import { WebSocketServer } from "ws";
 import type { OverlayEvent } from "@miciodev/shared-types";
 import { parseBoundedInteger } from "./config.js";
 import { gracefulShutdownRelay } from "./shutdown.js";
-import { MockSource, type EventSource } from "./sources/mock-source.js";
-import { YouTubeSource } from "./sources/youtube-source.js";
+import { createEventSource } from "./source-selection.js";
 
 function loadDotenv(): void {
   const file = resolve(process.cwd(), ".env");
@@ -20,19 +19,8 @@ function loadDotenv(): void {
 loadDotenv();
 const port = parseBoundedInteger(process.env.PORT, { name: "PORT", fallback: 8787, minimum: 1, maximum: 65_535 });
 const host = process.env.HOST || "127.0.0.1";
-const sourceName = process.env.EVENT_SOURCE ?? "mock";
+const sourceName = process.env.EVENT_SOURCE ?? "none";
 const mockIntervalMs = parseBoundedInteger(process.env.MOCK_INTERVAL_MS, { name: "MOCK_INTERVAL_MS", fallback: 8_000, minimum: 1_000, maximum: 60_000 });
-
-function createSource(): EventSource {
-  if (sourceName === "mock") return new MockSource(mockIntervalMs);
-  if (sourceName === "youtube") {
-    const apiKey = process.env.YOUTUBE_API_KEY;
-    const liveChatId = process.env.YOUTUBE_LIVE_CHAT_ID;
-    if (!apiKey || !liveChatId) throw new Error("YOUTUBE_API_KEY and YOUTUBE_LIVE_CHAT_ID are required for EVENT_SOURCE=youtube");
-    return new YouTubeSource(apiKey, liveChatId, Number(process.env.POLL_INTERVAL_MS ?? 10_000));
-  }
-  throw new Error(`Unsupported EVENT_SOURCE: ${sourceName}. Use mock or youtube.`);
-}
 
 const server = createServer((request, response) => {
   if (request.url === "/health") {
@@ -45,7 +33,15 @@ const server = createServer((request, response) => {
 });
 
 const websocketServer = new WebSocketServer({ server, path: "/events" });
-const source = createSource();
+const source = createEventSource({
+  sourceName,
+  mockSourceEnabled: process.env.MOCK_SOURCE_ENABLED,
+  mockIntervalMs,
+  youtubeApiKey: process.env.YOUTUBE_API_KEY,
+  youtubeLiveChatId: process.env.YOUTUBE_LIVE_CHAT_ID,
+  youtubeChannelHandle: process.env.YOUTUBE_CHANNEL_HANDLE,
+  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 10_000),
+});
 source.subscribe((event: OverlayEvent) => {
   const message = JSON.stringify(event);
   websocketServer.clients.forEach((client) => {

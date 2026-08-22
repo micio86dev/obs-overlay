@@ -9,7 +9,8 @@
     "dev:relay": "pnpm --filter @miciodev/event-relay dev",
     "lint": "eslint .",
     "typecheck": "pnpm -r --if-present run typecheck",
-    "test": "pnpm -r --if-present run test",
+    "test:focused-guard": "node scripts/check-focused-tests.mjs",
+    "test": "pnpm test:focused-guard && node --test scripts/check-focused-tests.test.mjs && pnpm -r --if-present run test",
     "build": "pnpm -r --if-present run build"
   },
   "devDependencies": {
