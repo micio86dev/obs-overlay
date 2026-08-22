@@ -1,0 +1,28 @@
+:root {
+  --color-background: #050706;
+  --color-surface: #0b120e;
+  --color-surface-transparent: rgb(5 7 6 / 72%);
+  --color-accent: #65ff8f;
+  --color-accent-bright: #a4ffbd;
+  --color-accent-deep: #18b64c;
+  --color-text: #f2fff5;
+  --color-text-muted: #a4b7a8;
+  --color-danger: #ff6b8f;
+  --font-family: "Courier New", monospace;
+  --font-weight: 700;
+  --radius-sm: 4px;
+  --radius-md: 10px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --duration-fast: 140ms;
+  --duration-base: 320ms;
+  --duration-alert: 4800ms;
+  --easing-glitch: cubic-bezier(.2,.9,.2,1);
+  --glow-soft: 0 0 12px rgb(101 255 143 / 45%);
+  --glow-strong: 0 0 8px rgb(101 255 143 / 85%), 0 0 30px rgb(101 255 143 / 35%);
+  --line-color: rgb(101 255 143 / 10%);
+}
