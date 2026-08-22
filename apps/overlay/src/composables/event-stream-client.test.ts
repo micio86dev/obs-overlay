@@ -29,6 +29,17 @@ describe("EventStreamClient", () => {
     client.stop();
   });
 
+  it("opens only one socket when start is called repeatedly", () => {
+    const createSocket = vi.fn(() => new FakeWebSocket() as unknown as WebSocket);
+    const client = new EventStreamClient("ws://relay.test/events", vi.fn(), vi.fn(), createSocket);
+
+    client.start();
+    client.start();
+
+    expect(createSocket).toHaveBeenCalledTimes(1);
+    client.stop();
+  });
+
   it("forwards only normalized overlay events and stops reconnecting after disposal", () => {
     vi.useFakeTimers();
     const socket = new FakeWebSocket();

@@ -19,6 +19,7 @@ export class EventStreamClient {
   ) {}
 
   public start(): void {
+    if (this.socket || this.reconnectTimer) return;
     this.disposed = false;
     this.connect();
   }
@@ -54,7 +55,8 @@ export class EventStreamClient {
       } catch { /* Ignore malformed network payloads. */ }
     });
     nextSocket.addEventListener("close", () => {
-      if (this.socket === nextSocket) this.scheduleReconnect();
+      if (this.socket !== nextSocket) return;
+      this.scheduleReconnect();
     });
     nextSocket.addEventListener("error", () => nextSocket.close());
   }

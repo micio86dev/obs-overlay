@@ -3,6 +3,7 @@ import type { EventListener, EventSource } from "./mock-source.js";
 
 const minimumPollIntervalMs = 1_000;
 const maximumPollIntervalMs = 60_000;
+const defaultFetchTimeoutMs = 15_000;
 
 type YouTubeMessage = {
   id: string;
@@ -33,7 +34,12 @@ function isYouTubeMessage(value: unknown): value is YouTubeMessage {
     || typeof snippet.publishedAt !== "string"
     || !hasOptionalString(snippet.displayMessage)) return false;
 
-  if (snippet.superChatDetails === undefined) return true;
+  if (snippet.type !== "superChatEvent") return snippet.superChatDetails === undefined || (
+    isRecord(snippet.superChatDetails)
+    && hasOptionalString(snippet.superChatDetails.amountDisplayString)
+    && hasOptionalString(snippet.superChatDetails.currency)
+    && hasOptionalString(snippet.superChatDetails.userComment)
+  );
   if (!isRecord(snippet.superChatDetails)) return false;
   return hasOptionalString(snippet.superChatDetails.amountDisplayString)
     && hasOptionalString(snippet.superChatDetails.currency)
@@ -53,14 +59,19 @@ export class YouTubeSource implements EventSource {
   private running = false;
   private generation = 0;
   private abortController: AbortController | undefined;
+  private requestTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  private nextPageToken: string | undefined;
   private readonly pollIntervalMs: number;
+  private readonly fetchTimeoutMs: number;
 
   public constructor(
     private readonly apiKey: string,
     private readonly liveChatId: string,
     intervalMs = 10_000,
+    fetchTimeoutMs = defaultFetchTimeoutMs,
   ) {
     this.pollIntervalMs = clampPollInterval(intervalMs);
+    this.fetchTimeoutMs = clampPollInterval(fetchTimeoutMs, defaultFetchTimeoutMs);
   }
 
   public subscribe(listener: EventListener): () => void {
@@ -72,6 +83,7 @@ export class YouTubeSource implements EventSource {
     if (this.running) return;
     this.running = true;
     this.generation += 1;
+    this.nextPageToken = undefined;
     void this.poll(this.generation);
   }
 
@@ -81,6 +93,8 @@ export class YouTubeSource implements EventSource {
     this.generation += 1;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
+    if (this.requestTimeoutTimer) clearTimeout(this.requestTimeoutTimer);
+    this.requestTimeoutTimer = undefined;
     this.abortController?.abort();
     this.abortController = undefined;
   }
@@ -93,17 +107,27 @@ export class YouTubeSource implements EventSource {
     if (!this.isActive(generation)) return;
     const abortController = new AbortController();
     this.abortController = abortController;
+    let didTimeout = false;
+    const requestTimeoutTimer = setTimeout(() => {
+      didTimeout = true;
+      abortController.abort();
+    }, this.fetchTimeoutMs);
+    this.requestTimeoutTimer = requestTimeoutTimer;
     try {
       const url = new URL("https://www.googleapis.com/youtube/v3/liveChat/messages");
       url.searchParams.set("liveChatId", this.liveChatId);
       url.searchParams.set("part", "id,snippet,authorDetails");
       url.searchParams.set("maxResults", "200");
       url.searchParams.set("key", this.apiKey);
+      if (this.nextPageToken) url.searchParams.set("pageToken", this.nextPageToken);
       const response = await fetch(url, { signal: abortController.signal });
       if (!response.ok) throw new Error(`YouTube API returned ${response.status}`);
       const payload: unknown = await response.json();
       if (!isRecord(payload)) throw new Error("YouTube API returned an invalid payload");
       if (!this.isActive(generation)) return;
+      this.nextPageToken = typeof payload.nextPageToken === "string" && payload.nextPageToken.length > 0
+        ? payload.nextPageToken
+        : undefined;
       const items = Array.isArray(payload.items) ? payload.items : [];
       for (const item of items) {
         if (!isYouTubeMessage(item)) {
@@ -120,10 +144,12 @@ export class YouTubeSource implements EventSource {
       const delay = typeof pollingIntervalMillis === "number" ? pollingIntervalMillis : this.pollIntervalMs;
       this.schedule(delay, generation);
     } catch (error) {
-      if (!this.isActive(generation) || abortController.signal.aborted) return;
+      if (!this.isActive(generation) || (abortController.signal.aborted && !didTimeout)) return;
       console.error("YouTube polling failed; retrying", error);
       this.schedule(this.pollIntervalMs, generation);
     } finally {
+      clearTimeout(requestTimeoutTimer);
+      if (this.requestTimeoutTimer === requestTimeoutTimer) this.requestTimeoutTimer = undefined;
       if (this.abortController === abortController) this.abortController = undefined;
     }
   }
@@ -149,7 +175,7 @@ export class YouTubeSource implements EventSource {
     };
     if (message.snippet.type === "textMessageEvent") return { ...base, type: "chat", message: message.snippet.displayMessage ?? "" };
     if (message.snippet.type === "newSponsorEvent") return { ...base, type: "subscriber", message: "Joined the channel" };
-    if (message.snippet.type === "superChatEvent") return {
+    if (message.snippet.type === "superChatEvent" && message.snippet.superChatDetails) return {
       ...base, type: "superchat", amount: message.snippet.superChatDetails?.amountDisplayString ?? "Support",
       currency: message.snippet.superChatDetails?.currency ?? "", message: message.snippet.superChatDetails?.userComment ?? ""
     };

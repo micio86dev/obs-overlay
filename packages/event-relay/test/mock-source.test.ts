@@ -41,12 +41,15 @@ test("YouTubeSource does not reschedule an in-flight poll after stop", async () 
   const originalSetTimeout = globalThis.setTimeout;
   let resolveFetch: ((value: Response) => void) | undefined;
   let signal: AbortSignal | undefined;
-  let schedules = 0;
+  const scheduledDelays: number[] = [];
   globalThis.fetch = ((_input, init) => {
     signal = init?.signal ?? undefined;
     return new Promise<Response>((resolve) => { resolveFetch = resolve; });
   }) as typeof fetch;
-  globalThis.setTimeout = ((handler: TimerHandler, delay?: number) => { void handler; schedules += 1; assert.equal(delay, 10_000); return 1 as unknown as ReturnType<typeof setTimeout>; }) as typeof setTimeout;
+  globalThis.setTimeout = ((_handler: TimerHandler, delay = 0) => {
+    scheduledDelays.push(delay);
+    return 1 as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
 
   try {
     const source = new YouTubeSource("key", "chat", Number.NaN);
@@ -55,7 +58,7 @@ test("YouTubeSource does not reschedule an in-flight poll after stop", async () 
     assert.equal(signal?.aborted, true);
     resolveFetch?.(new Response(JSON.stringify({ items: [] }), { status: 200 }));
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
-    assert.equal(schedules, 0);
+    assert.deepEqual(scheduledDelays, [15_000]);
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.setTimeout = originalSetTimeout;
@@ -110,6 +113,111 @@ test("YouTubeSource skips malformed entries while publishing valid entries from 
   } finally {
     globalThis.fetch = originalFetch;
     console.warn = originalConsoleWarn;
+  }
+});
+
+test("YouTubeSource skips super chats that omit superChatDetails", async () => {
+  const originalFetch = globalThis.fetch;
+  const received: string[] = [];
+  globalThis.fetch = (() => Promise.resolve(new Response(JSON.stringify({
+    items: [
+      { id: "broken-superchat", snippet: { type: "superChatEvent", publishedAt: "2026-08-22T00:00:00.000Z" }, authorDetails: { displayName: "MicioFan" } },
+      { id: "chat-1", snippet: { type: "textMessageEvent", publishedAt: "2026-08-22T00:00:00.000Z", displayMessage: "still here" }, authorDetails: { displayName: "MicioFan" } },
+    ],
+  }), { status: 200 }))) as typeof fetch;
+
+  try {
+    const source = new YouTubeSource("key", "chat");
+    source.subscribe((event) => received.push(event.id));
+    source.start();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(received, ["chat-1"]);
+    source.stop();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("YouTubeSource carries the API page token to the following poll and clears it when absent", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const urls: URL[] = [];
+  const timers: Array<{ handler: TimerHandler; delay: number; cleared: boolean }> = [];
+  globalThis.fetch = ((input) => {
+    urls.push(new URL(String(input)));
+    return Promise.resolve(new Response(JSON.stringify(urls.length === 1
+      ? { items: [], nextPageToken: "next-page", pollingIntervalMillis: 1_000 }
+      : { items: [], pollingIntervalMillis: 1_000 }), { status: 200 }));
+  }) as typeof fetch;
+  globalThis.setTimeout = ((handler: TimerHandler, delay = 0) => {
+    timers.push({ handler, delay, cleared: false });
+    return timers.length as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => {
+    const timer = timers[Number(id) - 1];
+    if (timer) timer.cleared = true;
+  }) as typeof clearTimeout;
+  let source: YouTubeSource | undefined;
+
+  try {
+    source = new YouTubeSource("key", "chat");
+    source.start();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    const followUpPoll = timers.find((timer) => timer.delay === 1_000 && !timer.cleared);
+    assert.ok(followUpPoll);
+    followUpPoll.handler();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    assert.equal(urls[0]?.searchParams.get("pageToken"), null);
+    assert.equal(urls[1]?.searchParams.get("pageToken"), "next-page");
+    const resetPoll = timers.filter((timer) => timer.delay === 1_000 && !timer.cleared).at(-1);
+    assert.ok(resetPoll);
+    resetPoll.handler();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    assert.equal(urls[2]?.searchParams.get("pageToken"), null);
+  } finally {
+    source?.stop();
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("YouTubeSource retries a stalled poll after its fetch timeout without leaking the timeout", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const timers: Array<{ handler: TimerHandler; delay: number; cleared: boolean }> = [];
+  let requestSignal: AbortSignal | undefined;
+  globalThis.fetch = ((_input, init) => new Promise<Response>((_resolve, reject) => {
+    requestSignal = init?.signal;
+    requestSignal?.addEventListener("abort", () => reject(new DOMException("Timed out", "AbortError")), { once: true });
+  })) as typeof fetch;
+  globalThis.setTimeout = ((handler: TimerHandler, delay = 0) => {
+    timers.push({ handler, delay, cleared: false });
+    return timers.length as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => {
+    const timer = timers[Number(id) - 1];
+    if (timer) timer.cleared = true;
+  }) as typeof clearTimeout;
+  let source: YouTubeSource | undefined;
+
+  try {
+    source = new YouTubeSource("key", "chat", 10_000, 1_000);
+    source.start();
+    const timeout = timers.find((timer) => timer.delay === 1_000);
+    assert.ok(timeout);
+    timeout.handler();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    assert.equal(requestSignal?.aborted, true);
+    assert.ok(timers.some((timer) => timer.delay === 10_000 && !timer.cleared));
+    assert.equal(timeout.cleared, true);
+  } finally {
+    source?.stop();
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
   }
 });
 
