@@ -1,0 +1,24 @@
+{
+  "name": "micio-dev-obs-overlay",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "dev": "pnpm --filter @miciodev/overlay dev",
+    "dev:overlay": "pnpm --filter @miciodev/overlay dev",
+    "dev:relay": "pnpm --filter @miciodev/event-relay dev",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm --filter @miciodev/event-relay test",
+    "build": "pnpm -r --if-present run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^24.10.0",
+    "eslint": "^9.39.0",
+    "eslint-plugin-vue": "^10.5.0",
+    "globals": "^16.5.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0"
+  }
+}
