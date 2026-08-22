@@ -10,6 +10,8 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test:focused-guard": "node scripts/check-focused-tests.mjs",
+    "test:browser": "pnpm --filter @miciodev/overlay test:browser",
+    "test:production-config": "pnpm --filter @miciodev/overlay test:production-config",
     "test": "pnpm test:focused-guard && node --test scripts/check-focused-tests.test.mjs && pnpm -r --if-present run test",
     "build": "pnpm -r --if-present run build"
   },

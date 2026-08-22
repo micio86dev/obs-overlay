@@ -7,13 +7,16 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "typecheck": "vue-tsc -b --pretty false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "playwright test --config playwright.demo.config.ts",
+    "test:production-config": "playwright test --config playwright.production.config.ts"
   },
   "dependencies": {
     "@miciodev/shared-types": "workspace:*",
     "vue": "^3.5.24"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@vitejs/plugin-vue": "^6.0.1",
     "vite": "^7.1.12",
     "vitest": "^4.1.11",

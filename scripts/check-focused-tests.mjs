@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import process from "node:process";
 import ts from "typescript";
 
-const testFilePattern = /(?:\.(?:test|spec)\.[cm]?[jt]sx?$|\/test\/.*\.[cm]?[jt]sx?$)/;
+const testFilePattern = /(?:\.(?:test|spec|pw)\.[cm]?[jt]sx?$|\/(?:test|tests)\/.*\.[cm]?[jt]sx?$)/;
 const testApiNames = new Set(["test", "it", "describe", "suite", "context", "specify"]);
 const ignoredDirectories = new Set(["node_modules", "dist", "coverage"]);
 const sourceDirectories = ["apps", "packages", "scripts"];

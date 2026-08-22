@@ -93,6 +93,27 @@ test("CLI guard recursively reports executable focused tests from an injected ro
   ]);
 });
 
+test("CLI guard discovers focused Playwright .pw.ts files inside tests directories", (context) => {
+  const root = mkdtempSync(join(tmpdir(), "focused-playwright-guard-"));
+  const fixturePath = join(root, "apps", "overlay", "tests", "screen-camera.pw.ts");
+  const diagnostics = [];
+
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "apps", "overlay", "tests"), { recursive: true });
+  writeFileSync(fixturePath, 'test.only("focused browser test", async () => {});\n');
+
+  const exitCode = runFocusedTestGuard({
+    root,
+    writeError: (message) => diagnostics.push(message)
+  });
+
+  assert.equal(exitCode, 1);
+  assert.deepEqual(diagnostics, [
+    "Focused tests are not allowed. Remove .only and only: true before running the test suite:",
+    "  apps/overlay/tests/screen-camera.pw.ts:1"
+  ]);
+});
+
 test("CLI executable exits nonzero for a focused test fixture", (context) => {
   const root = mkdtempSync(join(tmpdir(), "focused-test-guard-process-"));
   const fixturePath = join(root, "apps", "nested", "fixture.test.ts");
