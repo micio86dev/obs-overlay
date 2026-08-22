@@ -13,4 +13,5 @@ This file records decisions made without pausing for input, as requested.
 9. **No captured video.** Screen and webcam areas are visual placement slots only, because OBS composes real capture sources more reliably.
 10. **No dotenv dependency.** The relay uses a tiny built-in `.env` parser before selecting its source, which keeps the runtime dependency surface minimal while honoring local credentials.
 11. **Minimal toolchain.** Vue/Vite, TypeScript, `ws`, ESLint, and `tsx` are the only build/runtime tools; no state, UI, or animation framework is needed.
-12. **No CREDITS.md.** This project uses no external assets; a credits file would imply third-party attributions where none exist.
+12. **Audio policy degrades gracefully.** Alert visuals still run when an OBS browser instance blocks Web Audio until its own autoplay policy allows it.
+13. **No CREDITS.md.** This project uses no external assets; a credits file would imply third-party attributions where none exist.

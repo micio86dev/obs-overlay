@@ -13,19 +13,24 @@ const label = computed(() => active.value?.type === "superchat" ? "SUPER CHAT" :
 const superChat = computed<SuperChatEvent | undefined>(() => active.value?.type === "superchat" ? active.value : undefined);
 
 function playSound(event: OverlayEvent): void {
-  const context = new AudioContext();
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.type = event.type === "superchat" ? "triangle" : "sine";
-  oscillator.frequency.setValueAtTime(event.type === "superchat" ? 660 : 440, context.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(event.type === "superchat" ? 990 : 660, context.currentTime + .16);
-  gain.gain.setValueAtTime(.0001, context.currentTime);
-  gain.gain.exponentialRampToValueAtTime(.12, context.currentTime + .02);
-  gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + .38);
-  oscillator.connect(gain).connect(context.destination);
-  oscillator.start();
-  oscillator.stop(context.currentTime + .4);
-  oscillator.addEventListener("ended", () => void context.close());
+  try {
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = event.type === "superchat" ? "triangle" : "sine";
+    oscillator.frequency.setValueAtTime(event.type === "superchat" ? 660 : 440, context.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(event.type === "superchat" ? 990 : 660, context.currentTime + .16);
+    gain.gain.setValueAtTime(.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(.12, context.currentTime + .02);
+    gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + .38);
+    oscillator.connect(gain).connect(context.destination);
+    void context.resume();
+    oscillator.start();
+    oscillator.stop(context.currentTime + .4);
+    oscillator.addEventListener("ended", () => void context.close());
+  } catch {
+    // A locked-down browser source still renders the alert without sound.
+  }
 }
 
 function advance(): void {
