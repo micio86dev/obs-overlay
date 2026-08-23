@@ -1,5 +1,5 @@
-export type PageName = "background" | "navbar" | "footer" | "chat" | "alerts" | "quiz" | "placement" | "index";
-export const pages: readonly PageName[] = ["background", "navbar", "footer", "chat", "alerts", "quiz", "placement", "index"];
+export type PageName = "background" | "navbar" | "footer" | "chat" | "alerts" | "quiz" | "placement" | "preview" | "index";
+export const pages: readonly PageName[] = ["background", "navbar", "footer", "chat", "alerts", "quiz", "placement", "preview", "index"];
 
 // The old single-page overlay called this route "game" (and, before that, "python-quiz"); an
 // existing Browser Source still pointed at either old name must keep resolving instead of

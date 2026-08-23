@@ -4,6 +4,9 @@ import { createMockEvent, demoEventTypes } from "@miciodev/shared-types/mock";
 import { demoLiveState } from "./demo-live-state";
 
 export function isDemoMode(value = import.meta.env.VITE_DEMO_MODE): boolean {
+  // A ?demo=true query param forces demo mode regardless of how this build was configured — the
+  // composite preview page uses it so it can show demo content over a live production deploy.
+  if (new URLSearchParams(window.location.search).get("demo") === "true") return true;
   return value !== "false";
 }
 

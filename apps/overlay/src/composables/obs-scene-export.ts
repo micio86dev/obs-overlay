@@ -1,5 +1,4 @@
-const canvasWidth = 1920;
-const canvasHeight = 1080;
+import { canvasHeight, canvasWidth, overlayPages as pages, type Box } from "./overlay-layout";
 
 // libobs's fixed sentinel UUID for "the default/main canvas" — confirmed against a real OBS Scene
 // Collection file (obs-studio/basic/scenes/*.json): every scene in a single-canvas setup carries
@@ -11,33 +10,6 @@ const mainCanvasUuid = "6c69626f-6273-4c00-9d88-c5136d61696e";
 // currently-loading OBS scene collection rather than guessed, so nothing here reads as "needs
 // migrating from an ancient format".
 const obsBuildVersion = 537_001_986;
-
-interface Box { x: number; y: number; width: number; height: number }
-
-interface PageSpec {
-  /** Scene item / source name, shown in OBS's Sources panel. */
-  name: string;
-  /** Path (with query string) appended to the current origin to build the Browser Source URL. */
-  path: string;
-  box: Box;
-}
-
-// One shared overlay scene, back to front: background first, alerts last (nothing should ever be
-// hidden behind a floating alert or reaction). Screen/webcam/logo placement frames sit between the
-// background and the HUD chrome, matching where a streamer's own Display Capture and webcam
-// sources belong in the stack — this export only ever adds Browser Sources, never a capture source,
-// since capture source types are OS-specific (screen_capture, macos-avcapture, dshow_input, ...)
-// while browser_source is identical across Windows, macOS, and Linux.
-const pages: readonly PageSpec[] = [
-  { name: "Background", path: "/background", box: { x: 0, y: 0, width: canvasWidth, height: canvasHeight } },
-  { name: "Placement — Screen", path: "/placement?label=Screen&radius=md", box: { x: 40, y: 120, width: 900, height: 563 } },
-  { name: "Placement — Webcam", path: "/placement?label=Webcam&radius=md", box: { x: 1500, y: 120, width: 380, height: 214 } },
-  { name: "Placement — Logo", path: "/placement?label=Logo&radius=sm", box: { x: 1810, y: 20, width: 90, height: 90 } },
-  { name: "Navbar", path: "/navbar", box: { x: 0, y: 0, width: canvasWidth, height: canvasHeight } },
-  { name: "Footer", path: "/footer", box: { x: 0, y: 0, width: canvasWidth, height: canvasHeight } },
-  { name: "Chat", path: "/chat", box: { x: 1450, y: 360, width: 430, height: 600 } },
-  { name: "Alerts", path: "/alerts", box: { x: 0, y: 0, width: canvasWidth, height: canvasHeight } },
-];
 
 function relativePosition(box: Box): { x: number; y: number } {
   return { x: (box.x - canvasWidth / 2) / (canvasHeight / 2), y: (box.y - canvasHeight / 2) / (canvasHeight / 2) };

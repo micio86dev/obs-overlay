@@ -38,6 +38,11 @@ function downloadObsSceneCollection(): void {
       <p>One <code>.json</code> file, ready for OBS's Scene Collection → Import. It adds every page below as its own Browser Source, already stacked and sized on a 1920×1080 canvas — you still add your own Display Capture and webcam sources and drag the three placement frames to line up with them. Works on Windows, macOS, and Linux alike.</p>
     </section>
 
+    <section class="export">
+      <a class="button" href="/preview">Preview the full layout</a>
+      <p>Every page above composed together on that same 1920×1080 canvas, scaled to fit this window, with demo mode forced on — so you can see the whole design with fake chat, alerts, and stats without opening OBS at all.</p>
+    </section>
+
     <ul>
       <li v-for="route in routes" :key="route.path">
         <a :href="route.path">{{ route.path }}</a>
@@ -52,10 +57,10 @@ function downloadObsSceneCollection(): void {
 h1 { color: var(--color-accent); }
 .export { padding: var(--space-4); margin: var(--space-5) 0; border: 1px solid var(--line-color); border-radius: var(--radius-md); background: var(--color-surface-transparent); }
 .export p { margin-top: var(--space-2); }
-button { padding: var(--space-2) var(--space-4); color: var(--color-background); border: 0; border-radius: var(--radius-sm); background: var(--color-accent); font-weight: var(--font-weight); cursor: pointer; }
-button:hover { background: var(--color-accent-bright); }
+button, .button { display: inline-block; padding: var(--space-2) var(--space-4); color: var(--color-background); border: 0; border-radius: var(--radius-sm); background: var(--color-accent); font-weight: var(--font-weight); text-decoration: none; cursor: pointer; }
+button:hover, .button:hover { background: var(--color-accent-bright); }
 code { color: var(--color-accent-bright); }
 ul { display: grid; gap: var(--space-4); padding: 0; list-style: none; }
-a { color: var(--color-accent-bright); font-weight: var(--font-weight); }
+ul a { color: var(--color-accent-bright); font-weight: var(--font-weight); }
 p { margin: var(--space-1) 0 0; color: var(--color-text-muted); }
 </style>

@@ -187,6 +187,8 @@ Every overlay piece is its own page, so it is its own **Browser Source**. There 
 
 Open the app root (`http://localhost:5173/` or your deployed URL) and click **Download OBS scene collection**. It downloads a `.json` file, ready for OBS's **Scene Collection → Import**, that adds every page above as its own Browser Source, already stacked in the right order and sized on a 1920×1080 canvas — three of them are `/placement` frames for the logo, screen, and webcam. It contains only Browser Sources, so the same file works unchanged on Windows, macOS, and Linux (capture-device sources are OS-specific, so there's no cross-platform packaging problem to solve — this sidesteps it rather than generating a package per OS). After importing, add your own Display Capture and webcam sources and drag the placement frames onto them.
 
+Click **Preview the full layout** on the same page to see that exact composition — every page embedded at its real OBS position and size on a scaled 1920×1080 canvas, in a normal browser tab, no OBS required. It forces demo mode on every embedded page via a `?demo=true` query param regardless of how the current deploy is configured, so the preview always shows fake chat, alerts, and stats even against a live production build.
+
 ### Building a scene by hand
 
 Skip this if the one-click import above already did it; read on to understand what it built, or to lay it out yourself.

@@ -10,6 +10,7 @@ describe("resolvePage", () => {
     expect(resolvePage("/alerts")).toBe("alerts");
     expect(resolvePage("/quiz")).toBe("quiz");
     expect(resolvePage("/placement")).toBe("placement");
+    expect(resolvePage("/preview")).toBe("preview");
   });
 
   it("ignores leading and trailing slashes", () => {

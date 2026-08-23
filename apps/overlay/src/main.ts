@@ -8,6 +8,7 @@ import FooterPage from "./pages/FooterPage.vue";
 import IndexPage from "./pages/IndexPage.vue";
 import NavbarPage from "./pages/NavbarPage.vue";
 import PlacementPage from "./pages/PlacementPage.vue";
+import PreviewPage from "./pages/PreviewPage.vue";
 import QuizPage from "./pages/QuizPage.vue";
 
 const pages: Record<PageName, Component> = {
@@ -18,6 +19,7 @@ const pages: Record<PageName, Component> = {
   alerts: AlertsPage,
   quiz: QuizPage,
   placement: PlacementPage,
+  preview: PreviewPage,
   index: IndexPage
 };
 
