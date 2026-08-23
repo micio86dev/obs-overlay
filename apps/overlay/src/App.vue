@@ -52,6 +52,8 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
       <div class="slot-grid" aria-hidden="true"></div>
       <section class="slot screen-slot" data-placement-frame="screen" :aria-hidden="demoMode ? undefined : 'true'" :aria-label="demoMode ? 'Screen capture placement' : undefined"></section>
     </div>
+    <div v-if="layout !== 'screen-only'" class="gap-fill column-gap-fill" aria-hidden="true"></div>
+    <div v-if="layout !== 'screen-only'" class="gap-fill row-gap-fill" aria-hidden="true"></div>
     <div v-if="layout !== 'screen-only'" class="slot-frame webcam-frame">
       <div class="slot-grid" aria-hidden="true"></div>
       <section class="slot webcam-slot" data-placement-frame="webcam" :aria-hidden="demoMode ? undefined : 'true'" :aria-label="demoMode ? 'Webcam placement' : undefined"></section>
@@ -128,7 +130,14 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
      only a thin sliver near the logo's bottom edge was actually transparent). */
   clip-path: polygon(0 0, calc(100% - var(--logo-inset) - var(--logo-size)) 0, calc(100% - var(--logo-inset) - var(--logo-size)) calc(var(--logo-inset) + var(--logo-size)), calc(100% - var(--logo-inset)) calc(var(--logo-inset) + var(--logo-size)), calc(100% - var(--logo-inset)) 0, 100% 0, 100% 100%, 0 100%);
 }
-.texture { position: absolute; z-index: -1; top: 0; right: 0; left: 0; height: 7rem; background: linear-gradient(to bottom, var(--color-background), transparent); mask-image: linear-gradient(to bottom, var(--color-background) 45%, transparent); pointer-events: none; clip-path: polygon(0 0, calc(100% - var(--logo-inset) - var(--logo-size)) 0, calc(100% - var(--logo-inset) - var(--logo-size)) calc(var(--logo-inset) + var(--logo-size)), calc(100% - var(--logo-inset)) calc(var(--logo-inset) + var(--logo-size)), calc(100% - var(--logo-inset)) 0, 100% 0, 100% 100%, 0 100%); }
+/* height is var(--pad-top), not a fixed "7rem": this vignette's bottom edge must land exactly
+   where the content box begins, or it paints a real (if faint) opaque-fading tint over the top
+   edge of whatever OBS source sits in the screen/webcam placement below it — a genuine, if subtle,
+   containment leak (confirmed by sampling actual pixel alpha there: up to ~73% opaque dark tint a
+   full 20px inside the capture box's top edge at 1920x1080, since the old fixed 7rem/112px always
+   overshot content-top's 5rem/80px by 32px, and by even more on narrower/mobile breakpoints where
+   --pad-top shrinks). Tracking --pad-top keeps this correct at every breakpoint automatically. */
+.texture { position: absolute; z-index: -1; top: 0; right: 0; left: 0; height: var(--pad-top); background: linear-gradient(to bottom, var(--color-background), transparent); mask-image: linear-gradient(to bottom, var(--color-background) 45%, transparent); pointer-events: none; clip-path: polygon(0 0, calc(100% - var(--logo-inset) - var(--logo-size)) 0, calc(100% - var(--logo-inset) - var(--logo-size)) calc(var(--logo-inset) + var(--logo-size)), calc(100% - var(--logo-inset)) calc(var(--logo-inset) + var(--logo-size)), calc(100% - var(--logo-inset)) 0, 100% 0, 100% 100%, 0 100%); }
 .brand { position: absolute; top: var(--space-5); left: var(--space-5); color: var(--color-accent); font-size: clamp(1.2rem, 2vw, 2rem); text-shadow: var(--glow-strong); letter-spacing: .08em; }
 .brand span { color: var(--color-text); }
 .brand small { margin-left: var(--space-2); color: var(--color-text-muted); font-size: .5em; }
@@ -180,6 +189,23 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
 .webcam-slot { width: var(--webcam-w); height: var(--webcam-h); }
 .feed { min-width: 0; align-self: end; }
 .alerts { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+/* Covers the literal CSS grid `gap` strip between the screen/quiz column and the webcam column
+   (and, for row-gap-fill, between the webcam box and the chat feed below it) with the same grid
+   pattern as everything else — a real, unowned grid gap is a strip nothing paints, and with a
+   lower-z-index OBS source composited underneath it would visibly leak through past the dashed
+   guide boxes' own borders. Positioned via the SAME --pad-x/--two-col-w/--webcam-h etc. custom
+   properties that already place the real boxes correctly, not independently re-derived numbers,
+   so it can never drift out of sync with them. Absolutely positioned (not a grid item), so it
+   can't perturb any grid track sizing — purely a decorative patch over the gap. Desktop only: the
+   portrait/mobile stacked layout already closes this gap to zero width directly (see below). */
+.gap-fill {
+  position: absolute; z-index: -2; pointer-events: none;
+  background: linear-gradient(var(--line-color) 1px, transparent 1px), linear-gradient(90deg, var(--line-color) 1px, transparent 1px), var(--color-background);
+  background-size: 3rem 3rem, 3rem 3rem, auto;
+  background-attachment: fixed, fixed, scroll;
+}
+.column-gap-fill { left: calc(var(--pad-x) + var(--two-col-w)); top: var(--pad-top); width: var(--space-4); height: var(--content-h); }
+.row-gap-fill { left: calc(100% - var(--pad-x) - var(--side-col-w)); top: calc(var(--pad-top) + var(--webcam-h)); width: var(--side-col-w); height: var(--space-4); }
 .layout-screen-webcam { grid-template-columns: minmax(0, 1fr) var(--side-col-w); grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-4); }
 .layout-screen-webcam .screen-frame { grid-row: 1 / 3; }
 .layout-screen-webcam .feed { grid-column: 2; }
@@ -200,6 +226,11 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
   .brand small { display: none; }
   .status-branding { right: var(--space-3); }
   .layout-screen-only .feed { top: calc(var(--pad-top) + var(--space-2)); right: calc(var(--screen-side-gutter) + var(--space-2)); bottom: calc(var(--pad-bottom) + var(--space-2)); width: min(20rem, calc(100vw - var(--space-6))); min-width: 0; }
+  /* .gap-fill's own position math (--two-col-w etc.) only makes sense in the two-column desktop
+     grid; the stacked mobile layout below already closes this gap to zero width directly via its
+     own gap:0, so the filler would not just be redundant here — its desktop-shaped math would
+     actively mis-position it against the now single-column, vertically stacked boxes. */
+  .gap-fill { display: none; }
 }
 /* Portrait is a genuine recomposition, not landscape squeezed thinner: screen and webcam stack
    vertically instead of sharing a row, so each gets a height-based share of the column instead
@@ -211,10 +242,13 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
     --screen-h: calc(var(--screen-w) * 10 / 16);
     --webcam-w: min(var(--content-w), calc(var(--content-h) * 0.3 * 16 / 9));
   }
+  /* gap:0 here too, same reason as the desktop rule above: a nonzero grid gap is a strip nothing
+     paints, and each stacked cell's own decoration (or, for .feed, .live-chat's own card once it
+     stretches to fill the cell) only covers its own cell — never the gap between cells. */
   .layout-screen-webcam, .layout-game {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);
-    gap: var(--space-3);
+    gap: 0;
   }
   .layout-screen-webcam .screen-frame, .layout-game .quiz-slot { grid-column: 1; grid-row: 1; }
   .layout-screen-webcam .webcam-frame, .layout-game .webcam-frame { grid-column: 1; grid-row: 2; }
@@ -226,7 +260,7 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
   .layout-screen-webcam .feed, .layout-game .feed { grid-column: 1; grid-row: 3; align-self: stretch; }
   .layout-screen-webcam .feed :deep(.live-chat), .layout-game .feed :deep(.live-chat) { display: flex; height: 100%; flex-direction: column; }
   .layout-screen-webcam .feed :deep(.messages), .layout-game .feed :deep(.messages) { flex: 1; min-height: 0; max-height: none; align-content: start; }
-  .layout-screen-only { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: var(--space-3); }
+  .layout-screen-only { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 0; }
   .layout-screen-only .screen-frame { grid-column: 1; grid-row: 1; }
   .layout-screen-only .feed { position: static; grid-column: 1; grid-row: 2; align-self: stretch; }
 }

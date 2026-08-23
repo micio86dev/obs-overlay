@@ -116,3 +116,54 @@ for (const { layout, frames } of sixteenByNineLayouts) {
     }
   });
 }
+
+/**
+ * A CSS grid `gap` between the screen/quiz column and the webcam column (and between the webcam
+ * box and the chat feed below it) is a strip nothing paints — with a lower-z-index OBS source
+ * composited underneath, that strip would visibly leak through past the dashed guide boxes' own
+ * borders, outside where the source is meant to be contained. .gap-fill patches exactly that strip
+ * with the same grid pattern; verify it's actually opaque there, not just present in the DOM.
+ */
+for (const layout of ["screen-webcam", "game"]) {
+  test(`${layout} has no real-alpha gap between its columns or rows at 1920x1080`, async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto(`/${layout}`);
+
+    const geo = await page.evaluate(() => {
+      const pick = (sel: string) => {
+        const el = document.querySelector(sel);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { x: r.x, right: r.right, bottom: r.bottom, width: r.width };
+      };
+      return {
+        left: pick(".screen-slot") ?? pick(".quiz-slot"),
+        webcamFrame: pick(".webcam-frame"),
+        webcamSlot: pick(".webcam-slot"),
+      };
+    });
+    if (!geo.left || !geo.webcamFrame || !geo.webcamSlot) throw new Error(`missing geometry in ${layout}`);
+
+    const columnGapMidX = (geo.left.right + geo.webcamFrame.x) / 2;
+    const rowGapMidX = geo.webcamFrame.x + geo.webcamFrame.width / 2;
+    const rowGapMidY = geo.webcamSlot.bottom + 8;
+    const shot = await page.screenshot({ omitBackground: true });
+    const alphas = await page.evaluate(
+      async ({ base64, points }) => {
+        const img = new Image();
+        img.src = "data:image/png;base64," + base64;
+        await img.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        return points.map(({ x, y }) => ctx.getImageData(x, y, 1, 1).data[3]);
+      },
+      { base64: shot.toString("base64"), points: [{ x: Math.round(columnGapMidX), y: 400 }, { x: Math.round(rowGapMidX), y: Math.round(rowGapMidY) }] }
+    );
+
+    expect(alphas[0], `${layout} column-gap strip must be opaque`).toBeGreaterThanOrEqual(250);
+    expect(alphas[1], `${layout} row-gap strip must be opaque`).toBeGreaterThanOrEqual(250);
+  });
+}
