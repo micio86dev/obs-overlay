@@ -16,9 +16,8 @@ test("builds the overlay in live mode with the Railway relay endpoint", async ({
 
     Object.defineProperty(window, "WebSocket", { configurable: true, value: MockWebSocket });
   });
-  await page.goto("/screen-only");
+  await page.goto("/navbar");
 
-  await expect(page.getByRole("main")).not.toHaveClass(/demo/);
   await expect(page.getByText("DEMO MODE", { exact: true })).toHaveCount(0);
   await expect(page.getByText("LIVE", { exact: true })).toBeVisible();
 

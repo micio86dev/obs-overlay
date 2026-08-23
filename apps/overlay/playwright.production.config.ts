@@ -5,7 +5,7 @@ const temporaryDirectory = process.env.RUNNER_TEMP ?? tmpdir();
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["production-config.pw.ts", "live-layout-frames.pw.ts"],
+  testMatch: ["production-config.pw.ts", "production-placement.pw.ts"],
   forbidOnly: true,
   outputDir: `${temporaryDirectory}/obs-overlay-playwright-production`,
   use: {
