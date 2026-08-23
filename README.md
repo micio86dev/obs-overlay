@@ -1,6 +1,6 @@
 # MicioDev OBS Overlay
 
-A browser-source overlay for OBS Studio with three scene layouts, a persistent live-chat panel, serialized alerts, synthesized alert sounds, and an optional local WebSocket relay for YouTube Live events.
+A browser-source overlay for OBS Studio, split into one small page per piece (background, navbar, footer, chat, alerts, quiz, and a reusable placement frame) so each is added as its own OBS Browser Source and positioned with OBS's own transform. A persistent live-chat panel, serialized alerts, synthesized alert sounds, and an optional local WebSocket relay for YouTube Live events are included.
 
 ## Prerequisites
 
@@ -33,7 +33,7 @@ No relay is required. Run this from the repository root:
 VITE_DEMO_MODE=true pnpm dev
 ```
 
-Open `http://localhost:5173/`. The status reads `DEMO MODE`, and chat messages plus Super Chat, Super Sticker, membership, gift, poll, and chat-mode alerts are generated in the browser.
+Open `http://localhost:5173/` for an index of every page. Open `http://localhost:5173/navbar` directly to see the connection status — it reads `DEMO MODE` — and `http://localhost:5173/chat` and `http://localhost:5173/alerts` to watch chat messages plus Super Chat, Super Sticker, membership, gift, poll, and chat-mode alerts generated in the browser.
 
 For a one-command local demo that starts both processes and cleans them up on `Ctrl+C`, run:
 
@@ -59,7 +59,7 @@ EVENT_SOURCE=mock MOCK_SOURCE_ENABLED=true pnpm dev:relay
 VITE_DEMO_MODE=false VITE_RELAY_URL=ws://localhost:8787/events pnpm dev
 ```
 
-Open `http://localhost:5173/`. The status should read `LIVE`; the events are synthetic relay events, not YouTube events.
+Open `http://localhost:5173/navbar`. The status should read `LIVE`; the events are synthetic relay events, not YouTube events.
 
 ### YouTube Live
 
@@ -96,7 +96,7 @@ VITE_RELAY_URL=ws://localhost:8787/events \
 pnpm dev
 ```
 
-When the channel is currently live, the overlay changes to `LIVE` as soon as its WebSocket connects. A shared compact footer shows the relay-owned lifecycle, duration, concurrent/peak viewers, session chat activity, paid support totals, and memberships only when each metric is available.
+When the channel is currently live, the `/navbar` page's connection status changes to `LIVE` as soon as its WebSocket connects. The `/footer` page shows the relay-owned lifecycle, duration, concurrent/peak viewers, session chat activity, paid support totals, and memberships only when each metric is available.
 
 #### What YouTube events are shown?
 
@@ -171,25 +171,33 @@ Restart the relevant process after changing configuration. Vite reads `VITE_*` v
 
 ## OBS Browser Source
 
-Start the selected overlay mode, then add a **Browser Source** in OBS with one of these URLs:
+Every overlay piece is its own page, so it is its own **Browser Source**. There is no `?layout=` switch to flip anymore — you build the layout once in OBS by adding, sizing, and stacking sources, and it stays that way across streams. Start the selected overlay mode, then add one Browser Source per row you need:
 
-| Layout | URL | Recommended canvas |
+| Page | URL | What it is |
 | --- | --- | --- |
-| Screen and webcam | `http://localhost:5173/?layout=screen-webcam` | 1920 × 1080 |
-| Screen only | `http://localhost:5173/?layout=screen-only` | 1920 × 1080 |
-| Game (Python quiz) | `http://localhost:5173/?layout=game` | 1920 × 1080 |
+| Background | `http://localhost:5173/background` | Full-bleed grid background. Bottom of the stack — opaque on purpose. |
+| Navbar | `http://localhost:5173/navbar` | Brand copy and the live connection badge, top corners. |
+| Footer | `http://localhost:5173/footer` | Viewer/revenue/member stats bar, bottom. |
+| Chat | `http://localhost:5173/chat` | Live chat panel. |
+| Alerts | `http://localhost:5173/alerts` | Alert queue, floating emoji reactions, and the poll HUD. |
+| Quiz | `http://localhost:5173/quiz` | Python quiz board (replaces a screen-capture Browser Source when running the game). |
+| Placement | `http://localhost:5173/placement?label=Screen&radius=md` | Generic reusable frame — add once per capture source (see below). |
 
-The `SCREEN CAPTURE` and `WEBCAM` regions are placement guides. Add your display capture and camera as separate OBS sources, then arrange them behind or beside the overlay as needed.
+### Building a scene
 
-The `game` layout replaces the screen placement with the Python quiz board and keeps the webcam placement next to it.
+1. Add `/background` first, sized to the full canvas, and put it at the **bottom** of the source list.
+2. Add your display capture and camera as native OBS sources (Display Capture, Video Capture Device) above the background.
+3. Add `/placement` once per capture source, sized and positioned in OBS to exactly cover it, **above** that capture source. It draws only a dashed border — the fully transparent interior lets the real capture show through, and OBS's own transform (not this app) now owns its size, position, and aspect ratio. Use the `label` query param for a readable source name in Demo Mode (e.g. `?label=Webcam`) and `radius=sm|md|none` to match the border's corner radius to what you're framing.
+4. Add `/navbar`, `/footer`, `/chat`, and `/alerts` above everything, each full-canvas — their content self-positions to a corner or edge, so the source itself can stay full-size.
+5. For the quiz game, swap your screen-capture source and its `/placement` frame for `/quiz`, sized to the same region.
 
-The top-right branding area always reserves a compact logo frame next to the connection status. A 36px global HUD footer is shared by every layout and never covers the main content. In Demo Mode, the `LOGO`, `SCREEN CAPTURE`, and `WEBCAM` labels are visible placement placeholders; they are removed in live mode. The header CTA, `ISCRIVITI CAGNACCIO!`, is intentional permanent brand copy, not a Demo Mode placeholder.
+Every page besides `/background` has a fully transparent document background, so stacking order — not layout math — is what keeps lower sources visible. In Demo Mode, `/placement`'s label is exposed to assistive tech as a visible placement hint; it is `aria-hidden` in live mode. The header CTA, `ISCRIVITI CAGNACCIO!`, is intentional permanent brand copy, not a Demo Mode placeholder.
 
-Recommended Browser Source settings:
+Recommended Browser Source settings, for every source above:
 
-- Set the width and height to match the layout canvas.
+- Set the width and height to match the region it covers (the full canvas for background/navbar/footer/chat/alerts, the exact capture region for a placement frame).
 - Enable **Refresh browser when scene becomes active**.
-- Enable **Control audio via OBS** if alert sounds should be mixed and monitored by OBS.
+- Enable **Control audio via OBS** on the `/alerts` source if alert sounds should be mixed and monitored by OBS.
 - Do not enable a custom CSS override unless you understand its effect on the overlay.
 
 ## Sound and connection troubleshooting
