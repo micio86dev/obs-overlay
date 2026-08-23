@@ -42,7 +42,12 @@ onBeforeUnmount(() => window.removeEventListener("resize", updateScale));
 </template>
 
 <style scoped>
-.preview { display: grid; place-items: center; width: 100vw; height: 100vh; overflow: hidden; background: var(--color-background); }
+/* flex, not grid: with a single child larger than its container, a grid's implicit track sizes to
+   the item's own (untransformed) box and anchors at the container's start corner — place-items
+   only centers the item WITHIN that oversized track, a no-op here, so scale()'s transform-origin
+   ends up centered on a point nowhere near the viewport's actual center. Flexbox's
+   align/justify-content center the child directly against the container instead. */
+.preview { display: flex; align-items: center; justify-content: center; width: 100vw; height: 100vh; overflow: hidden; background: var(--color-background); }
 .canvas { position: relative; flex: none; transform-origin: center; }
 iframe { position: absolute; border: 0; background: transparent; }
 </style>
