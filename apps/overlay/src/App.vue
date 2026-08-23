@@ -107,6 +107,13 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
   position: absolute; inset: 0; z-index: -2; pointer-events: none;
   background: linear-gradient(var(--line-color) 1px, transparent 1px), linear-gradient(90deg, var(--line-color) 1px, transparent 1px), var(--color-background);
   background-size: 3rem 3rem, 3rem 3rem, auto;
+  /* fixed, not the default scroll: every grid-painting element (this one, and each .slot-frame)
+     is a separate box with its own local (0,0) origin, so a scroll-attached pattern re-starts its
+     3rem tile phase at each box's own corner — visibly misaligned wherever two of these boxes
+     meet, since pad-top/pad-x aren't exact multiples of 3rem. fixed anchors the pattern to the
+     VIEWPORT instead of the element's own box, so every element painting it lines up on one
+     shared grid regardless of where its own box happens to sit. */
+  background-attachment: fixed, fixed, scroll;
   mask-image: linear-gradient(#000, #000), linear-gradient(#000, #000);
   mask-size: 100% 100%, var(--content-w) var(--content-h);
   mask-position: 0 0, var(--pad-x) var(--pad-top);
@@ -155,6 +162,10 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
   position: absolute; inset: 0;
   background: linear-gradient(var(--line-color) 1px, transparent 1px), linear-gradient(90deg, var(--line-color) 1px, transparent 1px), var(--color-background);
   background-size: 3rem 3rem, 3rem 3rem, auto;
+  /* fixed, matching .padding-frame: keeps this box's own local grid tiling on the same
+     viewport-anchored phase as every other grid-painting element, so the pattern reads as one
+     continuous grid instead of visibly jogging wherever two boxes' edges meet. */
+  background-attachment: fixed, fixed, scroll;
   mask-image: linear-gradient(#000, #000), linear-gradient(#000, #000);
   mask-position: 0 0, center top;
   mask-repeat: no-repeat;
