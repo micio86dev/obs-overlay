@@ -1,6 +1,6 @@
 # MicioDev OBS Overlay
 
-A browser-source overlay for OBS Studio, split into one small page per piece (background, navbar, footer, chat, alerts, quiz, and a reusable placement frame) so each is added as its own OBS Browser Source and positioned with OBS's own transform. A persistent live-chat panel, serialized alerts, synthesized alert sounds, and an optional local WebSocket relay for YouTube Live events are included.
+A browser-source overlay for OBS Studio, split into one small page per piece (background, navbar, footer, chat, alerts, quiz, and a reusable placement frame) so each is added as its own OBS Browser Source and positioned with OBS's own transform. The app root offers a one-click OBS Scene Collection export and a live browser preview of the whole composed layout — see [One-click setup](#one-click-setup). A persistent live-chat panel, serialized alerts, synthesized alert sounds, and an optional local WebSocket relay for YouTube Live events are included.
 
 ## Prerequisites
 
