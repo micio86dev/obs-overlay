@@ -33,6 +33,8 @@ test("author role flags are optional booleans on every event", () => {
 test("accepts a state envelope while retaining raw event backwards compatibility", () => {
   assert.equal(isRelayMessage({ kind: "event", event: { ...base, type: "chat", message: "hello" } }), true);
   assert.equal(isRelayMessage({ kind: "state", state: { status: "live", broadcastId: "video-1", concurrentViewers: 128, peakViewers: 128, session: { chatMessages: 3, superChatCount: 0, superStickerCount: 0, newMembers: 0, giftedMemberships: 0, superChatRevenueMicros: {} } } }), true);
+  assert.equal(isRelayMessage({ kind: "state", state: { status: "live", subscriberCount: 4_200, session: { chatMessages: 0, superChatCount: 0, superStickerCount: 0, newMembers: 0, giftedMemberships: 0, superChatRevenueMicros: {} } } }), true);
+  assert.equal(isRelayMessage({ kind: "state", state: { status: "live", subscriberCount: -1, session: { chatMessages: 0, superChatCount: 0, superStickerCount: 0, newMembers: 0, giftedMemberships: 0, superChatRevenueMicros: {} } } }), false);
   assert.equal(isRelayMessage({ kind: "state", state: { status: "live", streamHealth: "unsafe", session: { chatMessages: 0, superChatCount: 0, superStickerCount: 0, newMembers: 0, giftedMemberships: 0, superChatRevenueMicros: {} } } }), false);
   assert.equal(isRelayMessage({ kind: "state", state: { status: ["live"], streamHealth: { toString: () => "good" }, session: { chatMessages: 0, superChatCount: 0, superStickerCount: 0, newMembers: 0, giftedMemberships: 0, superChatRevenueMicros: {} } } }), false);
   assert.equal(isRelayMessage({ kind: "state", state: { status: "wrong" } }), false);

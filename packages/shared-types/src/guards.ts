@@ -100,6 +100,7 @@ export function isLiveState(value: unknown): value is LiveState {
   return timestamps.every(isOptionalString)
     && (value.concurrentViewers === undefined || isNonNegativeInteger(value.concurrentViewers))
     && (value.peakViewers === undefined || isNonNegativeInteger(value.peakViewers))
+    && (value.subscriberCount === undefined || isNonNegativeInteger(value.subscriberCount))
     && hasValidHealth;
 }
 

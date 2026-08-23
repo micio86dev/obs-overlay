@@ -177,12 +177,11 @@ Start the selected overlay mode, then add a **Browser Source** in OBS with one o
 | --- | --- | --- |
 | Screen and webcam | `http://localhost:5173/?layout=screen-webcam` | 1920 × 1080 |
 | Screen only | `http://localhost:5173/?layout=screen-only` | 1920 × 1080 |
-| Webcam only | `http://localhost:5173/?layout=webcam-only` | 1280 × 720 |
-| Screen / camera | `http://localhost:5173/?layout=screen-camera` | 1920 × 1080 |
+| Game (Python quiz) | `http://localhost:5173/?layout=game` | 1920 × 1080 |
 
 The `SCREEN CAPTURE` and `WEBCAM` regions are placement guides. Add your display capture and camera as separate OBS sources, then arrange them behind or beside the overlay as needed.
 
-The `screen-camera` layout provides a near-fullscreen Screen/Camera frame rather than a separate webcam placement. Its live-chat panel is full height and layered above the right side of that frame, leaving the capture visible behind it.
+The `game` layout replaces the screen placement with the Python quiz board and keeps the webcam placement next to it.
 
 The top-right branding area always reserves a compact logo frame next to the connection status. A 36px global HUD footer is shared by every layout and never covers the main content. In Demo Mode, the `LOGO`, `SCREEN CAPTURE`, and `WEBCAM` labels are visible placement placeholders; they are removed in live mode. The header CTA, `ISCRIVITI CAGNACCIO!`, is intentional permanent brand copy, not a Demo Mode placeholder.
 

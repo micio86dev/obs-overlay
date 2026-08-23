@@ -38,26 +38,9 @@ async function expectTransparentDashedFrame(frame: Locator): Promise<void> {
   expect(styles.borderStyle).toBe("dashed");
 }
 
-test("live screen-camera keeps only screen and logo placement frames", async ({ page }) => {
-  await mockWebSocket(page);
-  await page.goto("/?layout=screen-camera");
-  const screenFrame = page.locator('[data-placement-frame="screen"]');
-  const webcamFrame = page.locator('[data-placement-frame="webcam"]');
-  const logoFrame = page.getByRole("img", { name: "Logo placement" });
-
-  await expect(page.getByRole("main")).toHaveClass(/layout-screen-camera/);
-  await expect(page.getByRole("main")).not.toHaveClass(/demo/);
-  await expect(screenFrame).toHaveCount(1);
-  await expect(webcamFrame).toHaveCount(0);
-  await Promise.all([
-    expectTransparentDashedFrame(screenFrame),
-    expectTransparentDashedFrame(logoFrame)
-  ]);
-});
-
 test("live screen-webcam keeps screen, webcam, and logo placement frames", async ({ page }) => {
   await mockWebSocket(page);
-  await page.goto("/?layout=screen-webcam");
+  await page.goto("/screen-webcam");
   const screenFrame = page.locator('[data-placement-frame="screen"]');
   const webcamFrame = page.locator('[data-placement-frame="webcam"]');
   const logoFrame = page.getByRole("img", { name: "Logo placement" });

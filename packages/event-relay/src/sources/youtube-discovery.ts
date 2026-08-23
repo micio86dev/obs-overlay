@@ -71,6 +71,32 @@ export async function discoverActiveBroadcast(
   return videoId ? fetchBroadcast(apiKey, videoId, signal) : undefined;
 }
 
+export interface ChannelStatistics {
+  subscriberCount?: number;
+}
+
+/**
+ * Subscriber counts are channel-level, not broadcast-level, and YouTube lets a channel
+ * hide the number entirely (`hiddenSubscriberCount`) — that must surface as undefined,
+ * never as a stale or fabricated figure.
+ */
+export async function fetchChannelStatistics(apiKey: string, channelHandle: string, signal?: AbortSignal): Promise<ChannelStatistics | undefined> {
+  const handle = normalizeChannelHandle(channelHandle);
+  if (!handle) return undefined;
+  const channelUrl = new URL(`${youtubeApiBaseUrl}/channels`);
+  channelUrl.searchParams.set("part", "statistics");
+  channelUrl.searchParams.set("forHandle", handle);
+  channelUrl.searchParams.set("key", apiKey);
+  const payload = await fetchYouTubePayload(channelUrl, signal);
+  const item = Array.isArray(payload.items) && isRecord(payload.items[0]) ? payload.items[0] : undefined;
+  const statistics = item && isRecord(item.statistics) ? item.statistics : undefined;
+  if (!statistics) return undefined;
+  if (statistics.hiddenSubscriberCount === true) return { subscriberCount: undefined };
+  const raw = getString(statistics, "subscriberCount");
+  const subscriberCount = raw && /^\d+$/.test(raw) ? Number(raw) : undefined;
+  return { subscriberCount };
+}
+
 export async function isEndedLiveChatResponse(response: Response): Promise<boolean> {
   if (response.status === 404) return true;
   if (response.status !== 403) return false;

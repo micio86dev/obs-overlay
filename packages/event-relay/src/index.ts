@@ -88,6 +88,15 @@ if (supportsLiveState(source)) source.subscribeState((state) => {
   liveSession.update(state);
   stateBroadcast.push(liveSession.snapshot);
 });
+interface ChannelStatisticsCapableEventSource { subscribeChannelStatistics(listener: (subscriberCount: number | undefined) => void): () => void; }
+function supportsChannelStatistics(value: unknown): value is ChannelStatisticsCapableEventSource {
+  if (!value || typeof value !== "object" || !("subscribeChannelStatistics" in value)) return false;
+  return typeof value.subscribeChannelStatistics === "function";
+}
+if (supportsChannelStatistics(source)) source.subscribeChannelStatistics((subscriberCount) => {
+  liveSession.updateChannelStatistics(subscriberCount);
+  stateBroadcast.push(liveSession.snapshot);
+});
 source.start();
 
 server.listen(port, host, () => console.log(`Event relay (${sourceName}) listening on http://${host}:${port}`));

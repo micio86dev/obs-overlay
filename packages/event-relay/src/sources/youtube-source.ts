@@ -3,6 +3,7 @@ import type { EventListener, EventSource } from "./mock-source.js";
 import { Backoff } from "../backoff.js";
 import { QuotaBudget, quotaUnits, type QuotaPressure } from "../quota-budget.js";
 import { BroadcastMetricsPoller } from "./broadcast-metrics.js";
+import { ChannelStatisticsPoller } from "./channel-statistics.js";
 import { RecentIds } from "../recent-ids.js";
 import { discoverActiveBroadcast, isEndedLiveChatResponse, normalizeChannelHandle } from "./youtube-discovery.js";
 import { isYouTubeMessage, normalizeYouTubeMessage, type YouTubeMessage } from "./youtube-normalize.js";
@@ -24,6 +25,7 @@ export function clampPollInterval(value: number, fallback = 10_000): number {
 export class YouTubeSource implements EventSource {
   private listeners = new Set<EventListener>();
   private stateListeners = new Set<(state: Omit<LiveState, "session">) => void>();
+  private subscriberCountListeners = new Set<(subscriberCount: number | undefined) => void>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly seenMessageIds = new RecentIds();
   private running = false;
@@ -40,6 +42,7 @@ export class YouTubeSource implements EventSource {
   private readonly pollIntervalMs: number;
   private readonly fetchTimeoutMs: number;
   private readonly metrics: BroadcastMetricsPoller;
+  private readonly channelStatistics: ChannelStatisticsPoller | undefined;
 
   public constructor(
     private readonly apiKey: string,
@@ -61,6 +64,16 @@ export class YouTubeSource implements EventSource {
       onState: (state) => this.publishState(state),
       onComplete: () => this.onBroadcastComplete(),
     });
+    // Subscriber count is channel-level, not tied to any one broadcast, so it needs the handle only.
+    this.channelStatistics = this.channelHandle
+      ? new ChannelStatisticsPoller({
+        apiKey: this.apiKey,
+        channelHandle: this.channelHandle,
+        budget: this.budget,
+        reportPressure: () => this.reportPressure(),
+        onSubscriberCount: (count) => this.publishSubscriberCount(count),
+      })
+      : undefined;
   }
 
   /** Announces a quota pressure change once, not on every poll. */
@@ -90,6 +103,11 @@ export class YouTubeSource implements EventSource {
     return () => this.stateListeners.delete(listener);
   }
 
+  public subscribeChannelStatistics(listener: (subscriberCount: number | undefined) => void): () => void {
+    this.subscriberCountListeners.add(listener);
+    return () => this.subscriberCountListeners.delete(listener);
+  }
+
   public start(): void {
     if (this.running) return;
     this.running = true;
@@ -98,6 +116,7 @@ export class YouTubeSource implements EventSource {
     this.discoveryBackoff.reset();
     this.chatBackoff.reset();
     this.metrics.stop();
+    this.channelStatistics?.start();
     void this.poll(this.generation);
   }
 
@@ -107,6 +126,7 @@ export class YouTubeSource implements EventSource {
     this.generation += 1;
     this.cancelChatWork();
     this.metrics.stop();
+    this.channelStatistics?.stop();
   }
 
   private isActive(generation: number): boolean {
@@ -254,6 +274,10 @@ export class YouTubeSource implements EventSource {
 
   private publishState(state: Omit<LiveState, "session">): void {
     this.stateListeners.forEach((listener) => listener(state));
+  }
+
+  private publishSubscriberCount(subscriberCount: number | undefined): void {
+    this.subscriberCountListeners.forEach((listener) => listener(subscriberCount));
   }
 
   private publish(event: OverlayEvent | undefined): void {

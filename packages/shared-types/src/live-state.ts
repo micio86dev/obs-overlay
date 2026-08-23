@@ -16,6 +16,7 @@ export interface LiveState {
   status: BroadcastStatus;
   concurrentViewers?: number;
   peakViewers?: number;
+  subscriberCount?: number;
   startedAt?: string;
   scheduledStartAt?: string;
   endedAt?: string;

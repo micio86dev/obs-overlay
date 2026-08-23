@@ -58,7 +58,10 @@ onBeforeUnmount(() => {
       <NeonBurst :type="active.type" />
       <div class="content">
         <p class="eyebrow">{{ label }}</p>
-        <h1>{{ active.author }}</h1>
+        <div class="author-line">
+          <img v-if="active.avatarUrl" class="avatar" :src="active.avatarUrl" alt="" loading="lazy" decoding="async" width="40" height="40" />
+          <h1>{{ active.author }}</h1>
+        </div>
         <p v-if="superChat" class="amount">{{ superChat.amount }}</p>
         <p v-else-if="active?.type === 'supersticker'" class="amount">{{ active.amount }} {{ active.stickerAltText ?? '' }}</p>
         <p v-else-if="active?.type === 'membership-gift'" class="message">{{ active.membershipCount }} memberships{{ active.levelName ? ` · ${active.levelName}` : '' }}</p>
@@ -76,7 +79,9 @@ onBeforeUnmount(() => {
 .alert { display: flex; align-items: center; gap: var(--space-4); max-width: min(74vw, 52rem); padding: var(--space-4) var(--space-6); border: 1px solid var(--color-accent); border-radius: var(--radius-md); background: var(--color-surface-transparent); box-shadow: var(--glow-strong); backdrop-filter: blur(8px); }
 .content { min-width: 0; }
 .eyebrow, .amount { margin: 0; color: var(--color-accent); letter-spacing: .12em; text-shadow: var(--glow-strong); }
-h1 { margin: var(--space-1) 0; color: var(--color-text); font-size: clamp(1.4rem, 3.2vw, 3rem); overflow-wrap: anywhere; }
+.author-line { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-1) 0; }
+.avatar { flex: none; width: 2.5rem; height: 2.5rem; border-radius: 50%; box-shadow: var(--glow-soft); }
+h1 { margin: 0; color: var(--color-text); font-size: clamp(1.4rem, 3.2vw, 3rem); overflow-wrap: anywhere; }
 .message { margin: 0; color: var(--color-text-muted); overflow-wrap: anywhere; }
 .glitch-enter-active, .glitch-leave-active { transition: opacity var(--duration-fast) var(--easing-glitch), transform var(--duration-fast) var(--easing-glitch); }
 .glitch-enter-from, .glitch-leave-to { opacity: 0; transform: translateX(var(--space-4)) skewX(-4deg); }

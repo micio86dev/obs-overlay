@@ -36,4 +36,9 @@ export class LiveSessionTracker {
   public record(event: OverlayEvent): void {
     this.state = { ...this.state, session: recordSessionMetrics(this.state.session, event) };
   }
+
+  /** Subscriber count is a channel-level stat polled independently of any broadcast's lifecycle. */
+  public updateChannelStatistics(subscriberCount: number | undefined): void {
+    this.state = { ...this.state, subscriberCount };
+  }
 }

@@ -25,3 +25,14 @@ test("clears live-only counters once a chat ending transitions the relay offline
   assert.equal(tracker.snapshot.session.chatMessages, 0);
   assert.equal(tracker.snapshot.broadcastId, undefined);
 });
+
+test("channel statistics update independently of the broadcast lifecycle", () => {
+  const tracker = new LiveSessionTracker();
+  tracker.update({ status: "live", broadcastId: "one", concurrentViewers: 24 });
+  tracker.updateChannelStatistics(1_240);
+  assert.equal(tracker.snapshot.subscriberCount, 1_240);
+  assert.equal(tracker.snapshot.concurrentViewers, 24, "an unrelated channel-stats update must not disturb broadcast fields");
+
+  tracker.updateChannelStatistics(undefined);
+  assert.equal(tracker.snapshot.subscriberCount, undefined, "a hidden subscriber count clears any stale number");
+});

@@ -19,6 +19,7 @@ const questions: readonly PythonQuestion[] = Array.from({ length: 10 }, (_, inde
   prompt: `Question ${index + 1}`,
   options: ["one", "two", "three", "four"],
   correctOption: 2,
+  difficulty: "facile",
 }));
 
 function chat(authorId: string, message: string): ChatEvent {

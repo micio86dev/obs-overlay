@@ -7,7 +7,7 @@ import type { PublicQuizState } from "../composables/quiz-state";
 
 const questionState: PublicQuizState = {
   phase: "question", questionNumber: 1, totalQuestions: 10, remainingSeconds: 30,
-  question: { id: "python-1", prompt: "Question", options: ["one", "two", "three", "four"] },
+  question: { id: "python-1", prompt: "Question", options: ["one", "two", "three", "four"], difficulty: "facile" },
   responses: [{ option: 1, count: 0, percentage: 0 }, { option: 2, count: 0, percentage: 0 }, { option: 3, count: 0, percentage: 0 }, { option: 4, count: 0, percentage: 0 }],
   leaderboard: [],
 };
@@ -22,7 +22,7 @@ describe("PythonQuizBoard", () => {
     mountedApp.mount(host);
     await Promise.resolve(); await nextTick();
     expect(host.textContent).toContain("Question");
-    expect(host.textContent).not.toContain("Correct answer");
+    expect(host.textContent).not.toContain("Risposta corretta");
   });
 
   it("shows a retrying fallback after a failed state request", async () => {
@@ -30,8 +30,8 @@ describe("PythonQuizBoard", () => {
     mountedApp = createApp(defineComponent({ setup: () => () => h(PythonQuizBoard, { events: [], stateLoader: async () => { throw new Error("relay unavailable"); } }) }));
     mountedApp.mount(host);
     await Promise.resolve(); await nextTick();
-    expect(host.textContent).toContain("QUIZ DATA UNAVAILABLE");
-    expect(host.textContent).toContain("Retrying automatically");
+    expect(host.textContent).toContain("DATI QUIZ NON DISPONIBILI");
+    expect(host.textContent).toContain("Nuovo tentativo automatico");
   });
 
   it("times out, retries after five seconds, and recovers when the relay responds", async () => {
@@ -45,7 +45,7 @@ describe("PythonQuizBoard", () => {
 
     await vi.advanceTimersByTimeAsync(4_000);
     await nextTick();
-    expect(host.textContent).toContain("QUIZ DATA UNAVAILABLE");
+    expect(host.textContent).toContain("DATI QUIZ NON DISPONIBILI");
     expect(loader).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(5_000);

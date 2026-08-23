@@ -21,6 +21,12 @@ describe("demoLiveState", () => {
     expect(state.concurrentViewers).toBeGreaterThan(0);
   });
 
+  it("carries a subscriber count once live so the navbar badge has something to show", () => {
+    const state = demoLiveState(3, now);
+
+    expect(state.subscriberCount).toBeGreaterThan(0);
+  });
+
   it("ramps viewers so peak tracking is visible", () => {
     const viewers = [3, 4, 5, 6].map((tick) => demoLiveState(tick, now).concurrentViewers ?? 0);
     expect(Math.max(...viewers)).toBeGreaterThan(Math.min(...viewers));

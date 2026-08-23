@@ -1,5 +1,5 @@
 import type { ChatEvent } from "@miciodev/shared-types";
-import type { PythonQuestion, QuizOption } from "./quiz/question-bank.js";
+import type { PythonQuestion, QuizDifficulty, QuizOption } from "./quiz/question-bank.js";
 
 export type QuizPhase = "question" | "results" | "final";
 
@@ -13,6 +13,7 @@ export interface PublicQuizQuestion {
   id: string;
   prompt: string;
   options: readonly [string, string, string, string];
+  difficulty: QuizDifficulty;
 }
 
 export interface PublicQuizResponse {
@@ -131,7 +132,7 @@ export class QuizGame {
     if (!score && this.scores.size >= this.maxParticipants) return false;
     const answer = Number(rawAnswer) as QuizOption;
     this.answers.set(participantId, answer);
-    const nextScore = score ?? { author: event.author.trim() || "Viewer", answers: 0, correct: 0 };
+    const nextScore = score ?? { author: event.author.trim() || "Spettatore", answers: 0, correct: 0 };
     nextScore.answers += 1;
     if (answer === this.currentQuestion.correctOption) nextScore.correct += 1;
     this.scores.set(participantId, nextScore);
@@ -149,7 +150,7 @@ export class QuizGame {
       questionNumber: this.questionIndex + 1,
       totalQuestions: this.questionCount,
       remainingSeconds: Math.max(0, Math.ceil((this.deadlineMs - this.scheduler.now()) / 1_000)),
-      question: { id: current.id, prompt: current.prompt, options: current.options },
+      question: { id: current.id, prompt: current.prompt, options: current.options, difficulty: current.difficulty },
       responses: currentResponses,
       result: this.phase === "question" ? undefined : { correctOption: current.correctOption, responses: currentResponses },
       leaderboard: this.phase === "question" ? [] : leaderboard,

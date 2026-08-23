@@ -38,7 +38,7 @@ export class MockSource implements EventSource {
     const startedAt = new Date(Date.now() - tick * this.intervalMs).toISOString();
     const state: Omit<LiveState, "session"> = tick < 2
       ? { broadcastId: this.broadcastId, status: "upcoming", scheduledStartAt: new Date(Date.now() + 90_000).toISOString() }
-      : { broadcastId: this.broadcastId, status: "live", startedAt, concurrentViewers: 40 + tick * 7, streamHealth: tick % 11 === 0 ? "warning" : "good" };
+      : { broadcastId: this.broadcastId, status: "live", startedAt, concurrentViewers: 40 + tick * 7, subscriberCount: 1_180 + tick * 3, streamHealth: tick % 11 === 0 ? "warning" : "good" };
     this.stateListeners.forEach((listener) => listener(state));
   }
 

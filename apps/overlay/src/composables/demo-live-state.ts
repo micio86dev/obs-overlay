@@ -22,6 +22,7 @@ export function demoLiveState(tick: number, now: number): Omit<LiveState, "sessi
     status: "live",
     startedAt,
     concurrentViewers: 42 + (tick - upcomingTicks) * 9,
+    subscriberCount: 1_180 + tick * 3,
     streamHealth: tick % 12 === 0 ? "warning" : "good",
   };
 }

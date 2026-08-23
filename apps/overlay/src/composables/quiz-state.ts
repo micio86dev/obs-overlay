@@ -1,12 +1,13 @@
 export type QuizOption = 1 | 2 | 3 | 4;
 export type QuizPhase = "question" | "results" | "final";
+export type QuizDifficulty = "facile" | "medio" | "difficile";
 
 export interface PublicQuizState {
   phase: QuizPhase;
   questionNumber: number;
   totalQuestions: number;
   remainingSeconds: number;
-  question: { id: string; prompt: string; options: readonly [string, string, string, string] };
+  question: { id: string; prompt: string; options: readonly [string, string, string, string]; difficulty: QuizDifficulty };
   responses: readonly { option: QuizOption; count: number; percentage: number }[];
   result?: { correctOption: QuizOption; responses: readonly { option: QuizOption; count: number; percentage: number }[] };
   leaderboard: readonly { author: string; correctAnswers: number; answeredQuestions: number; percentage: number }[];
@@ -29,7 +30,8 @@ function isState(value: unknown): value is PublicQuizState {
   const validQuestion = !!state.question && typeof state.question.id === "string" && state.question.id.trim().length > 0
     && typeof state.question.prompt === "string" && state.question.prompt.trim().length > 0
     && Array.isArray(state.question.options) && state.question.options.length === 4
-    && state.question.options.every((option) => typeof option === "string" && option.trim().length > 0);
+    && state.question.options.every((option) => typeof option === "string" && option.trim().length > 0)
+    && (state.question.difficulty === "facile" || state.question.difficulty === "medio" || state.question.difficulty === "difficile");
   const validResult = state.result !== undefined && [1, 2, 3, 4].includes(state.result.correctOption)
     && Array.isArray(state.result.responses) && state.result.responses.every(validResponse);
   return (state.phase === "question" || state.phase === "results" || state.phase === "final")

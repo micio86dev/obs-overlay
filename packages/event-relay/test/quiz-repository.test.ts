@@ -22,7 +22,7 @@ test("seeds exactly one hundred Python questions idempotently", () => {
   try {
     seedQuizDatabase(database);
     seedQuizDatabase(database);
-    database.exec("INSERT INTO quiz_questions (id, prompt, option_1, option_2, option_3, option_4, correct_option) VALUES ('obsolete', 'obsolete', '1', '2', '3', '4', 1)");
+    database.exec("INSERT INTO quiz_questions (id, prompt, option_1, option_2, option_3, option_4, correct_option, difficulty) VALUES ('obsolete', 'obsolete', '1', '2', '3', '4', 1, 'facile')");
     seedQuizDatabase(database);
 
     const row = database.prepare("SELECT COUNT(*) AS count FROM quiz_questions").get() as { count: number };

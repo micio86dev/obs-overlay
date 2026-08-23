@@ -26,10 +26,12 @@ const QuizBoardComponent = defineComponent({ name: "QuizBoardComponent", setup: 
 async function renderOverlay(demoMode: boolean): Promise<string> {
   vi.resetModules();
   vi.doMock("./components/AlertQueue.vue", () => ({ default: EmptyComponent }));
+  vi.doMock("./components/LiveIdentityBadge.vue", () => ({ default: EmptyComponent }));
   vi.doMock("./components/LiveStatusBar.vue", () => ({ default: EmptyComponent }));
   vi.doMock("./components/LiveChatFeed.vue", () => ({ default: EmptyComponent }));
   vi.doMock("./components/PollHud.vue", () => ({ default: EmptyComponent }));
   vi.doMock("./components/PythonQuizBoard.vue", () => ({ default: QuizBoardComponent }));
+  vi.doMock("./components/ReactionBurst.vue", () => ({ default: EmptyComponent }));
   vi.doMock("./composables/useDemoEvents", () => ({ isDemoMode: () => demoMode, useDemoEvents: vi.fn() }));
   vi.doMock("./composables/useEventStream", () => ({ useEventStream: () => ({ status: computed(() => "LIVE") }) }));
 
@@ -45,30 +47,34 @@ async function renderOverlay(demoMode: boolean): Promise<string> {
 
 afterEach(() => {
   vi.doUnmock("./components/AlertQueue.vue");
+  vi.doUnmock("./components/LiveIdentityBadge.vue");
   vi.doUnmock("./components/LiveStatusBar.vue");
   vi.doUnmock("./components/LiveChatFeed.vue");
   vi.doUnmock("./components/PollHud.vue");
   vi.doUnmock("./components/PythonQuizBoard.vue");
+  vi.doUnmock("./components/ReactionBurst.vue");
   vi.doUnmock("./composables/useDemoEvents");
   vi.doUnmock("./composables/useEventStream");
   vi.unstubAllGlobals();
 });
 
 describe("overlay branding", () => {
-  it("renders all placement placeholders and accessible branding in demo mode", async () => {
-    vi.stubGlobal("window", { location: { search: "" } });
+  it("renders accessible branding in demo mode without any visible placeholder text over the capture slots", async () => {
+    vi.stubGlobal("window", { location: { pathname: "/", search: "" } });
     const output = await renderOverlay(true);
 
     expect(output).toContain("ISCRIVITI CAGNACCIO!");
     expect(output).toContain("DEMO MODE");
-    expect(output).toContain("LOGO");
-    expect(output).toContain("SCREEN CAPTURE");
-    expect(output).toContain("WEBCAM");
+    expect(output).not.toContain("LOGO");
+    expect(output).not.toContain("SCREEN CAPTURE");
+    expect(output).not.toContain("WEBCAM");
     expect(output).toContain('class="logo-frame" role="img" aria-label="Logo placement"');
+    expect(output).toContain('aria-label="Screen capture placement"');
+    expect(output).toContain('aria-label="Webcam placement"');
   });
 
   it("hides placement placeholders while preserving logo placement semantics in live mode", async () => {
-    vi.stubGlobal("window", { location: { search: "" } });
+    vi.stubGlobal("window", { location: { pathname: "/", search: "" } });
     const output = await renderOverlay(false);
 
     expect(output).toContain("ISCRIVITI CAGNACCIO!");
@@ -82,21 +88,21 @@ describe("overlay branding", () => {
     expect(output).toContain('aria-hidden="true"');
   });
 
-  it("renders the near-fullscreen screen-camera layout with only one large placement frame", async () => {
-    vi.stubGlobal("window", { location: { search: "?layout=screen-camera" } });
+  it("renders the screen-only layout with only one large placement frame", async () => {
+    vi.stubGlobal("window", { location: { pathname: "/", search: "?layout=screen-only" } });
     const output = await renderOverlay(true);
 
-    expect(output).toContain('class="overlay layout-screen-camera demo"');
+    expect(output).toContain('class="overlay layout-screen-only demo"');
     expect(output).toContain('class="slot screen-slot"');
     expect(output).not.toContain('class="slot webcam-slot"');
     expect(output).toContain('class="feed"');
   });
 
-  it("routes python-quiz to an autonomous quiz board while retaining the webcam placement", async () => {
-    vi.stubGlobal("window", { location: { search: "?layout=python-quiz" } });
+  it("routes game to an autonomous quiz board while retaining the webcam placement", async () => {
+    vi.stubGlobal("window", { location: { pathname: "/", search: "?layout=game" } });
     const output = await renderOverlay(true);
 
-    expect(output).toContain('class="overlay layout-python-quiz demo"');
+    expect(output).toContain('class="overlay layout-game demo"');
     expect(output).toContain('aria-label="Python quiz board"');
     expect(output).toContain('class="slot webcam-slot"');
     expect(output).not.toContain('class="slot screen-slot"');
@@ -106,12 +112,11 @@ describe("overlay branding", () => {
     const expectedSlots = [
       { query: "?layout=screen-webcam", screen: true, webcam: true },
       { query: "?layout=screen-only", screen: true, webcam: false },
-      { query: "?layout=webcam-only", screen: false, webcam: true },
-      { query: "?layout=screen-camera", screen: true, webcam: false },
+      { query: "?layout=game", screen: false, webcam: true },
     ];
 
     for (const expected of expectedSlots) {
-      vi.stubGlobal("window", { location: { search: expected.query } });
+      vi.stubGlobal("window", { location: { pathname: "/", search: expected.query } });
       const output = await renderOverlay(false);
 
       expect(output).toContain('class="logo-frame"');
@@ -123,11 +128,25 @@ describe("overlay branding", () => {
     }
   });
 
+  it("resolves the layout from a clean path, e.g. an OBS Browser Source pointed at /game", async () => {
+    vi.stubGlobal("window", { location: { pathname: "/game", search: "" } });
+    const output = await renderOverlay(true);
+
+    expect(output).toContain('class="overlay layout-game demo"');
+  });
+
+  it("prefers the path over a stale ?layout= query string when both are present", async () => {
+    vi.stubGlobal("window", { location: { pathname: "/screen-only", search: "?layout=game" } });
+    const output = await renderOverlay(true);
+
+    expect(output).toContain('class="overlay layout-screen-only demo"');
+  });
+
   it("falls back to the screen-webcam layout for empty and invalid layout values", async () => {
-    vi.stubGlobal("window", { location: { search: "" } });
+    vi.stubGlobal("window", { location: { pathname: "/", search: "" } });
     const emptyLayoutOutput = await renderOverlay(true);
 
-    vi.stubGlobal("window", { location: { search: "?layout=not-a-layout" } });
+    vi.stubGlobal("window", { location: { pathname: "/", search: "?layout=not-a-layout" } });
     const invalidLayoutOutput = await renderOverlay(true);
 
     for (const output of [emptyLayoutOutput, invalidLayoutOutput]) {
