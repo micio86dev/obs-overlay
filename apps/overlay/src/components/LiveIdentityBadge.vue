@@ -13,7 +13,7 @@ const subscriberLabel = computed(() => state.value.subscriberCount === undefined
 
 <template>
   <div class="identity" aria-label="Channel status">
-    <span class="badge" :class="state.status" aria-live="polite"><i aria-hidden="true"></i>{{ label }}<template v-if="time"> · {{ time }}</template></span>
+    <span class="badge" :class="state.status" aria-live="polite"><i aria-hidden="true"></i>{{ label }}<span v-if="time" class="duration optional"> · {{ time }}</span></span>
     <span v-if="subscriberLabel" class="subs optional">{{ subscriberLabel }}</span>
   </div>
 </template>

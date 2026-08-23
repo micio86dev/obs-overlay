@@ -186,6 +186,7 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
   .layout-screen-webcam .screen-frame, .layout-screen-webcam .webcam-frame, .layout-screen-webcam .feed, .layout-game .quiz-slot, .layout-game .webcam-frame, .layout-game .feed { grid-column: 1; grid-row: auto; }
   .brand, .status-branding { top: var(--space-3); }
   .brand { left: var(--space-3); }
+  .brand small { display: none; }
   .status-branding { right: var(--space-3); }
   .layout-screen-only .feed { top: calc(var(--pad-top) + var(--space-2)); right: calc(var(--screen-side-gutter) + var(--space-2)); bottom: calc(var(--pad-bottom) + var(--space-2)); width: min(20rem, calc(100vw - var(--space-6))); min-width: 0; }
 }
@@ -206,7 +207,14 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
   }
   .layout-screen-webcam .screen-frame, .layout-game .quiz-slot { grid-column: 1; grid-row: 1; }
   .layout-screen-webcam .webcam-frame, .layout-game .webcam-frame { grid-column: 1; grid-row: 2; }
+  /* align-self:stretch makes .feed's OWN grid cell fill the flexible row, but its child .live-chat
+     card was still sizing to its own content — with few or no messages that left a tall, empty
+     background gap between the card and the row's real bottom edge. Stretching .live-chat itself
+     (same recipe .layout-screen-only already uses on desktop) makes the card fill the space
+     instead of floating in it. */
   .layout-screen-webcam .feed, .layout-game .feed { grid-column: 1; grid-row: 3; align-self: stretch; }
+  .layout-screen-webcam .feed :deep(.live-chat), .layout-game .feed :deep(.live-chat) { display: flex; height: 100%; flex-direction: column; }
+  .layout-screen-webcam .feed :deep(.messages), .layout-game .feed :deep(.messages) { flex: 1; min-height: 0; max-height: none; align-content: start; }
   .layout-screen-only { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: var(--space-3); }
   .layout-screen-only .screen-frame { grid-column: 1; grid-row: 1; }
   .layout-screen-only .feed { position: static; grid-column: 1; grid-row: 2; align-self: stretch; }
