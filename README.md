@@ -33,7 +33,7 @@ No relay is required. Run this from the repository root:
 VITE_DEMO_MODE=true pnpm dev
 ```
 
-Open `http://localhost:5173/`. The status reads `DEMO MODE`, and chat messages and alerts are generated in the browser.
+Open `http://localhost:5173/`. The status reads `DEMO MODE`, and chat messages plus Super Chat, Super Sticker, membership, gift, poll, and chat-mode alerts are generated in the browser.
 
 For a one-command local demo that starts both processes and cleans them up on `Ctrl+C`, run:
 
@@ -96,15 +96,31 @@ VITE_RELAY_URL=ws://localhost:8787/events \
 pnpm dev
 ```
 
-When the channel is currently live, the overlay changes to `LIVE` as soon as its WebSocket connects. It stays visually idle until YouTube sends a supported event.
+When the channel is currently live, the overlay changes to `LIVE` as soon as its WebSocket connects. A shared compact footer shows the relay-owned lifecycle, duration, concurrent/peak viewers, session chat activity, paid support totals, and memberships only when each metric is available.
 
 #### What YouTube events are shown?
 
-- Text messages are added to the live-chat panel.
-- Super Chats become `SUPER CHAT` alerts with their display amount and message.
-- New YouTube channel memberships become `NEW SUBSCRIBER` alerts.
+- Text messages are added to the live-chat panel, with the author's YouTube display name, avatar, and owner/moderator/member role.
+- Super Chats and Super Stickers become distinct serialized alerts. The official API supplies a Super Sticker alt label and ID, not artwork.
+- New YouTube channel memberships (kept as the legacy `subscriber` event) become `NEW MEMBER` alerts.
+- Membership milestones, membership gifts, gift recipients (batched), and members-only chat changes are normalized by the relay.
+- Polls appear in a compact HUD above the status bar with per-option percentages taken from `pollDetails.metadata.options[].tally`, and the result stays on screen briefly after the poll closes.
+- Moderation never creates a large alert. A `tombstone` removes the message it replaces, and a `userBannedEvent` retracts that author's remaining backlog from the panel.
 
-Ordinary channel subscriptions are not emitted by this integration; the YouTube Live Chat API event used here reports new memberships, not every new subscriber.
+Provider channel IDs never reach the browser: the relay swaps them for an opaque per-process participant ID, while the public display name and avatar — already visible in YouTube's own live chat — are passed through so alerts can credit the supporter.
+
+Ordinary channel subscriptions are not emitted by this integration; the YouTube Live Chat API event used here reports new memberships, not every new subscriber. Broadcast `statistics.totalChatCount`, owner stream health, and the `testing` lifecycle state require OAuth/owner resources, so this API-key-only relay intentionally leaves them unavailable rather than inventing data. `giftEvent` is a documented message type with no documented payload, so it is deliberately ignored.
+
+#### YouTube API quota
+
+`liveChatMessages.list` costs 5 quota units per call, so polling every 10 seconds spends about 43,200 units a day against a default project allowance of 10,000. The relay therefore:
+
+- never polls faster than `POLL_INTERVAL_MS`, even when the API suggests a shorter interval;
+- charges every call against `YOUTUBE_DAILY_QUOTA_UNITS` (default `10000`, `0` disables the guard);
+- slows chat polling to 60s and metric refreshes to 5 minutes once 80% of the allowance is spent;
+- pauses polling until the next UTC midnight when the allowance is gone, holding the last known state instead of failing.
+
+For a multi-hour stream, request a quota increase for your Google Cloud project and raise `YOUTUBE_DAILY_QUOTA_UNITS` to match.
 
 #### No active live broadcast
 
@@ -146,6 +162,7 @@ QUIZ_DATABASE_PATH=./data/quiz.sqlite
 YOUTUBE_API_KEY=YOUR_YOUTUBE_DATA_API_KEY
 YOUTUBE_CHANNEL_HANDLE=miciodev
 POLL_INTERVAL_MS=10000
+YOUTUBE_DAILY_QUOTA_UNITS=10000
 ```
 
 Restart the relevant process after changing configuration. Vite reads `VITE_*` variables when it starts, so a running `pnpm dev` server must be stopped and started again.
@@ -167,7 +184,7 @@ The `SCREEN CAPTURE` and `WEBCAM` regions are placement guides. Add your display
 
 The `screen-camera` layout provides a near-fullscreen Screen/Camera frame rather than a separate webcam placement. Its live-chat panel is full height and layered above the right side of that frame, leaving the capture visible behind it.
 
-The top-right branding area always reserves a compact logo frame next to the connection status. In Demo Mode, the `LOGO`, `SCREEN CAPTURE`, and `WEBCAM` labels are visible placement placeholders; they are removed in live mode. The header CTA, `ISCRIVITI CAGNACCIO!`, is intentional permanent brand copy, not a Demo Mode placeholder.
+The top-right branding area always reserves a compact logo frame next to the connection status. A 36px global HUD footer is shared by every layout and never covers the main content. In Demo Mode, the `LOGO`, `SCREEN CAPTURE`, and `WEBCAM` labels are visible placement placeholders; they are removed in live mode. The header CTA, `ISCRIVITI CAGNACCIO!`, is intentional permanent brand copy, not a Demo Mode placeholder.
 
 Recommended Browser Source settings:
 
@@ -215,6 +232,8 @@ The relay listens on `127.0.0.1:8787` by default and exposes:
 - Read-only public quiz state: `http://localhost:8787/quiz/state`
 
 Set `HOST=0.0.0.0` only when a trusted network boundary is in place. `PORT` accepts integers from 1 to 65535; `MOCK_INTERVAL_MS` accepts 1000 to 60000 milliseconds. Invalid explicit values fail at startup.
+
+`/events` has no application authentication: it is an intentionally public, read-only Browser Source endpoint. Do not expose it directly to the internet unless a trusted reverse proxy or network boundary restricts access. Inbound WebSocket frames up to 16 KiB are accepted by the transport and ignored by the relay; oversized frames are rejected by the transport. The relay admits at most 100 simultaneous connections and rejects the 101st with close code `1013`. It terminates a client before the current queued outbound bytes plus the next UTF-8 payload would exceed 256 KiB, rather than retaining an unbounded backlog. Outbound relay messages larger than 16 KiB are skipped. None of these limits are authorization controls.
 
 Never commit API keys. `.env` and `.env.local` are ignored by Git; commit only the provided `.env.example` templates with placeholder values. If a key is exposed, revoke it in Google Cloud and create a replacement immediately.
 

@@ -8,8 +8,8 @@ type StateLoader = (signal: AbortSignal) => Promise<PublicQuizState>;
 const props = defineProps<{ events: readonly OverlayEvent[]; stateLoader?: StateLoader }>();
 const state = ref<PublicQuizState>();
 const loadError = ref<string>();
-let retryTimer: ReturnType<typeof window.setTimeout> | undefined;
-let pollTimer: ReturnType<typeof window.setTimeout> | undefined;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+let pollTimer: ReturnType<typeof setTimeout> | undefined;
 let controller: AbortController | undefined;
 let disposed = false;
 
@@ -21,19 +21,19 @@ function defaultStateLoader(signal: AbortSignal): Promise<PublicQuizState> {
 async function refresh(): Promise<void> {
   controller?.abort();
   controller = new AbortController();
-  const timeout = window.setTimeout(() => controller?.abort(), 4_000);
+  const timeout = setTimeout(() => controller?.abort(), 4_000);
   try {
     const nextState = await (props.stateLoader ?? defaultStateLoader)(controller.signal);
     if (disposed) return;
     state.value = nextState;
     loadError.value = undefined;
-    pollTimer = window.setTimeout(() => void refresh(), 1_000);
+    pollTimer = setTimeout(() => void refresh(), 1_000);
   } catch (error: unknown) {
     if (disposed) return;
     loadError.value = error instanceof Error && error.name === "AbortError" ? "Quiz state request timed out" : error instanceof Error ? error.message : "Quiz state could not be loaded";
-    retryTimer = window.setTimeout(() => void refresh(), 5_000);
+    retryTimer = setTimeout(() => void refresh(), 5_000);
   } finally {
-    window.clearTimeout(timeout);
+    clearTimeout(timeout);
   }
 }
 
@@ -41,8 +41,8 @@ onMounted(() => void refresh());
 onBeforeUnmount(() => {
   disposed = true;
   controller?.abort();
-  if (retryTimer) window.clearTimeout(retryTimer);
-  if (pollTimer) window.clearTimeout(pollTimer);
+  if (retryTimer) clearTimeout(retryTimer);
+  if (pollTimer) clearTimeout(pollTimer);
 });
 </script>
 

@@ -1,5 +1,5 @@
-import type { OverlayEvent } from "@miciodev/shared-types";
-import { isOverlayEvent } from "@miciodev/shared-types";
+import type { LiveState, OverlayEvent } from "@miciodev/shared-types";
+import { isOverlayEvent, isRelayMessage } from "@miciodev/shared-types";
 
 const maxReconnectDelay = 10_000;
 
@@ -16,6 +16,7 @@ export class EventStreamClient {
     private readonly onEvent: (event: OverlayEvent) => void,
     private readonly onConnectionChange: (connected: boolean) => void,
     private readonly createSocket: SocketFactory = (url) => new WebSocket(url),
+    private readonly onState: (state: LiveState) => void = () => undefined,
   ) {}
 
   public start(): void {
@@ -51,7 +52,10 @@ export class EventStreamClient {
     nextSocket.addEventListener("message", (message) => {
       try {
         const parsed: unknown = JSON.parse(String(message.data));
-        if (!this.disposed && isOverlayEvent(parsed)) this.onEvent(parsed);
+        if (this.disposed) return;
+        if (isOverlayEvent(parsed)) this.onEvent(parsed); // Relay v1 compatibility.
+        if (isRelayMessage(parsed) && parsed.kind === "event") this.onEvent(parsed.event);
+        if (isRelayMessage(parsed) && parsed.kind === "state") this.onState(parsed.state);
       } catch { /* Ignore malformed network payloads. */ }
     });
     nextSocket.addEventListener("close", () => {

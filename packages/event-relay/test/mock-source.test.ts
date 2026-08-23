@@ -1,60 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { OverlayEvent } from "@miciodev/shared-types";
+import type { LiveState, OverlayEvent } from "@miciodev/shared-types";
 import { MockSource } from "../src/sources/mock-source.ts";
-import {
-  clampPollInterval,
-  discoverActiveLiveChatId,
-  normalizeChannelHandle,
-  YouTubeSource,
-} from "../src/sources/youtube-source.ts";
+import { normalizeChannelHandle } from "../src/sources/youtube-discovery.ts";
+import { clampPollInterval, YouTubeSource } from "../src/sources/youtube-source.ts";
 
 test("normalizeChannelHandle accepts an optional at sign", () => {
   assert.equal(normalizeChannelHandle("@miciodev"), "miciodev");
   assert.equal(normalizeChannelHandle("  miciodev  "), "miciodev");
   assert.equal(normalizeChannelHandle("@"), undefined);
-});
-
-test("discoverActiveLiveChatId resolves the current live chat from a channel handle", async () => {
-  const originalFetch = globalThis.fetch;
-  const urls: URL[] = [];
-  globalThis.fetch = ((input) => {
-    const url = new URL(String(input));
-    urls.push(url);
-    const payload = url.pathname.endsWith("/channels")
-      ? { items: [{ id: "channel-1" }] }
-      : url.pathname.endsWith("/search")
-        ? { items: [{ id: { videoId: "live-video-1" } }] }
-        : { items: [{ liveStreamingDetails: { activeLiveChatId: "live-chat-1" } }] };
-    return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
-  }) as typeof fetch;
-
-  try {
-    assert.equal(await discoverActiveLiveChatId("api-key", "@miciodev"), "live-chat-1");
-    assert.equal(urls[0]?.pathname, "/youtube/v3/channels");
-    assert.equal(urls[0]?.searchParams.get("forHandle"), "miciodev");
-    assert.equal(urls[1]?.searchParams.get("eventType"), "live");
-    assert.equal(urls[1]?.searchParams.get("channelId"), "channel-1");
-    assert.equal(urls[2]?.searchParams.get("part"), "liveStreamingDetails");
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("discoverActiveLiveChatId returns undefined when the channel has no current live", async () => {
-  const originalFetch = globalThis.fetch;
-  let fetches = 0;
-  globalThis.fetch = (() => {
-    fetches += 1;
-    return Promise.resolve(new Response(JSON.stringify(fetches === 1 ? { items: [{ id: "channel-1" }] } : { items: [] }), { status: 200 }));
-  }) as typeof fetch;
-
-  try {
-    assert.equal(await discoverActiveLiveChatId("api-key", "miciodev"), undefined);
-    assert.equal(fetches, 2);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
 });
 
 test("YouTubeSource exponentially backs off active-live discovery when no live is active", async () => {
@@ -104,6 +58,7 @@ test("YouTubeSource rebinds to a newly discovered live chat after the previous c
   const originalConsoleInfo = console.info;
   const liveChatIds: string[] = [];
   const received: string[] = [];
+  const states: string[] = [];
   const timers: Array<{ handler: TimerHandler; delay: number; cleared: boolean }> = [];
   let discovery = 0;
   console.info = () => undefined;
@@ -117,7 +72,7 @@ test("YouTubeSource rebinds to a newly discovered live chat after the previous c
       return Promise.resolve(new Response(JSON.stringify({ items: [{ id: { videoId: `video-${discovery}` } }] }), { status: 200 }));
     }
     if (url.pathname.endsWith("/videos")) {
-      return Promise.resolve(new Response(JSON.stringify({ items: [{ liveStreamingDetails: { activeLiveChatId: `chat-${discovery}` } }] }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ items: [{ liveStreamingDetails: { activeLiveChatId: `chat-${discovery}`, actualStartTime: "2026-08-23T12:00:00.000Z" } }] }), { status: 200 }));
     }
     liveChatIds.push(url.searchParams.get("liveChatId") ?? "");
     return Promise.resolve(discovery === 1
@@ -144,6 +99,7 @@ test("YouTubeSource rebinds to a newly discovered live chat after the previous c
   try {
     source = new YouTubeSource("key", undefined, 1_000, 15_000, "@miciodev");
     source.subscribe((event) => received.push(event.id));
+    source.subscribeState((state) => states.push(`${state.status}:${state.broadcastId ?? ""}`));
     source.start();
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
     const retry = timers.find((timer) => timer.delay === 300_000 && !timer.cleared);
@@ -152,6 +108,7 @@ test("YouTubeSource rebinds to a newly discovered live chat after the previous c
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
     assert.deepEqual(liveChatIds, ["chat-1", "chat-2"]);
     assert.deepEqual(received, ["message-after-rebind"]);
+    assert.deepEqual(states, ["live:video-1", "offline:", "live:video-2"]);
   } finally {
     source?.stop();
     globalThis.fetch = originalFetch;
@@ -347,13 +304,13 @@ test("YouTubeSource carries the API page token to the following poll and clears 
     source = new YouTubeSource("key", "chat");
     source.start();
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
-    const followUpPoll = timers.find((timer) => timer.delay === 1_000 && !timer.cleared);
+    const followUpPoll = timers.find((timer) => timer.delay === 10_000 && !timer.cleared);
     assert.ok(followUpPoll);
     followUpPoll.handler();
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
     assert.equal(urls[0]?.searchParams.get("pageToken"), null);
     assert.equal(urls[1]?.searchParams.get("pageToken"), "next-page");
-    const resetPoll = timers.filter((timer) => timer.delay === 1_000 && !timer.cleared).at(-1);
+    const resetPoll = timers.filter((timer) => timer.delay === 10_000 && !timer.cleared).at(-1);
     assert.ok(resetPoll);
     resetPoll.handler();
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
@@ -428,4 +385,167 @@ test("YouTubeSource start is idempotent", () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("YouTubeSource invalidates metrics work on stop and backs off failed metric refreshes", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const originalConsoleWarn = console.warn;
+  const timers: Array<{ handler: TimerHandler; delay: number; cleared: boolean }> = [];
+  let videoFetches = 0;
+  let metricSignal: AbortSignal | undefined;
+  let resolveStaleMetric: ((response: Response) => void) | undefined;
+  const states: string[] = [];
+  console.warn = () => undefined;
+  globalThis.setTimeout = ((handler: TimerHandler, delay = 0) => {
+    timers.push({ handler, delay, cleared: false });
+    return timers.length as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => { const timer = timers[Number(id) - 1]; if (timer) timer.cleared = true; }) as typeof clearTimeout;
+  globalThis.fetch = ((input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/channels")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "channel" }] })));
+    if (url.pathname.endsWith("/search")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: { videoId: "video-1" } }] })));
+    if (url.pathname.endsWith("/liveChat/messages")) return Promise.resolve(new Response(JSON.stringify({ items: [], pollingIntervalMillis: 60_000 })));
+    videoFetches += 1;
+    if (videoFetches === 1) return Promise.resolve(new Response(JSON.stringify({ items: [{ liveStreamingDetails: { activeLiveChatId: "chat-1", actualStartTime: "2026-08-23T12:00:00.000Z" } }] })));
+    if (videoFetches < 4) return Promise.resolve(new Response(JSON.stringify({ error: {} }), { status: 429 }));
+    metricSignal = init?.signal;
+    return new Promise<Response>((resolve) => { resolveStaleMetric = resolve; });
+  }) as typeof fetch;
+  const source = new YouTubeSource("key", undefined, 1_000, 15_000, "miciodev");
+  try {
+    source.subscribeState((state) => states.push(`${state.status}:${state.concurrentViewers ?? ""}`));
+    source.start();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    const firstMetric = timers.find((timer) => timer.delay === 20_000 && !timer.cleared);
+    assert.ok(firstMetric);
+    firstMetric.handler();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    const retry = timers.filter((timer) => timer.delay === 20_000 && !timer.cleared).at(-1);
+    assert.ok(retry);
+    retry.handler();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    const secondRetry = timers.find((timer) => timer.delay === 40_000 && !timer.cleared);
+    assert.ok(secondRetry);
+    secondRetry.handler();
+    source.stop();
+    assert.equal(metricSignal?.aborted, true);
+    assert.equal(timers.some((timer) => timer.delay === 40_000 && !timer.cleared), false);
+    const stateCount = states.length;
+    resolveStaleMetric?.(new Response(JSON.stringify({ items: [{ liveStreamingDetails: { activeLiveChatId: "chat-1", actualStartTime: "2026-08-23T12:00:00.000Z", concurrentViewers: "999" } }] })));
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    assert.equal(states.length, stateCount);
+  } finally {
+    source.stop();
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+    console.warn = originalConsoleWarn;
+  }
+});
+
+test("YouTubeSource exponentially backs off rate-limited chat polling", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const originalConsoleError = console.error;
+  const timers: Array<{ handler: TimerHandler; delay: number; cleared: boolean }> = [];
+  console.error = () => undefined;
+  globalThis.fetch = (() => Promise.resolve(new Response(JSON.stringify({ error: {} }), { status: 429 }))) as typeof fetch;
+  globalThis.setTimeout = ((handler: TimerHandler, delay = 0) => { timers.push({ handler, delay, cleared: false }); return timers.length as unknown as ReturnType<typeof setTimeout>; }) as typeof setTimeout;
+  globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => { const timer = timers[Number(id) - 1]; if (timer) timer.cleared = true; }) as typeof clearTimeout;
+  const source = new YouTubeSource("key", "chat", 10_000);
+  try {
+    source.start();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    const firstRetry = timers.find((timer) => timer.delay === 10_000 && !timer.cleared);
+    assert.ok(firstRetry);
+    firstRetry.handler();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    assert.ok(timers.some((timer) => timer.delay === 20_000 && !timer.cleared));
+  } finally {
+    source.stop();
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+    console.error = originalConsoleError;
+  }
+});
+
+test("metrics completion aborts an in-flight chat poll before rediscovery", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const timers: Array<{ handler: TimerHandler; delay: number; cleared: boolean }> = [];
+  let videoFetches = 0;
+  let chatSignal: AbortSignal | undefined;
+  let resolveChat: ((response: Response) => void) | undefined;
+  const events: string[] = [];
+  const states: string[] = [];
+  globalThis.setTimeout = ((handler: TimerHandler, delay = 0) => { timers.push({ handler, delay, cleared: false }); return timers.length as unknown as ReturnType<typeof setTimeout>; }) as typeof setTimeout;
+  globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => { const timer = timers[Number(id) - 1]; if (timer) timer.cleared = true; }) as typeof clearTimeout;
+  globalThis.fetch = ((input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/channels")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "channel" }] })));
+    if (url.pathname.endsWith("/search")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: { videoId: "video-1" } }] })));
+    if (url.pathname.endsWith("/videos")) {
+      videoFetches += 1;
+      const details = videoFetches === 1 ? { activeLiveChatId: "chat-1", actualStartTime: "2026-08-23T12:00:00.000Z" } : { activeLiveChatId: "chat-1", actualStartTime: "2026-08-23T12:00:00.000Z", actualEndTime: "2026-08-23T12:30:00.000Z" };
+      return Promise.resolve(new Response(JSON.stringify({ items: [{ liveStreamingDetails: details }] })));
+    }
+    chatSignal = init?.signal;
+    return new Promise<Response>((resolve) => { resolveChat = resolve; });
+  }) as typeof fetch;
+  const source = new YouTubeSource("key", undefined, 1_000, 15_000, "miciodev");
+  source.subscribe((event) => events.push(event.id));
+  source.subscribeState((state) => states.push(`${state.status}:${state.broadcastId ?? ""}`));
+  try {
+    source.start();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    const metric = timers.find((timer) => timer.delay === 20_000 && !timer.cleared);
+    assert.ok(metric);
+    metric.handler();
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    assert.equal(chatSignal?.aborted, true);
+    assert.ok(states.includes("complete:video-1"));
+    assert.ok(timers.some((timer) => timer.delay === 300_000 && !timer.cleared));
+    resolveChat?.(new Response(JSON.stringify({ items: [{ id: "stale", snippet: { type: "textMessageEvent", publishedAt: "2026-08-23T12:00:00.000Z", displayMessage: "late" } }] })));
+    await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+    assert.deepEqual(events, []);
+    assert.equal(timers.some((timer) => timer.delay === 1_000 && !timer.cleared), false);
+  } finally {
+    source.stop();
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("MockSource drives a broadcast lifecycle so the status bar is testable without YouTube", () => {
+  const source = new MockSource(1_000);
+  const states: Array<Omit<LiveState, "session">> = [];
+  source.subscribeState((state) => states.push(state));
+
+  source.emitNext();
+  assert.equal(states.at(-1)?.status, "upcoming");
+  assert.ok(states.at(-1)?.scheduledStartAt);
+
+  for (let tick = 0; tick < 3; tick += 1) source.emitNext();
+  const live = states.at(-1);
+  assert.equal(live?.status, "live");
+  assert.ok(live?.startedAt);
+  assert.ok((live?.concurrentViewers ?? 0) > 0);
+  assert.equal(live?.broadcastId, states.at(0)?.broadcastId, "one mock broadcast must not split into several sessions");
+});
+
+test("MockSource viewers climb so peak tracking has something to track", () => {
+  const source = new MockSource(1_000);
+  const viewers: number[] = [];
+  source.subscribeState((state) => { if (state.concurrentViewers !== undefined) viewers.push(state.concurrentViewers); });
+  for (let tick = 0; tick < 8; tick += 1) source.emitNext();
+
+  assert.ok(viewers.length > 1);
+  assert.ok(Math.max(...viewers) > Math.min(...viewers));
 });

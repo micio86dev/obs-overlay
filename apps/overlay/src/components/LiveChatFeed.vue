@@ -31,4 +31,5 @@ header { display: flex; align-items: center; gap: var(--space-2); padding: var(-
 .messages { display: grid; gap: var(--space-2); max-height: 38vh; padding: var(--space-3); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--color-accent-deep) transparent; }
 .fading { opacity: .48; transition: opacity var(--duration-base) var(--easing-glitch); }
 @keyframes pulse { 50% { opacity: .4; transform: scale(.8); } }
+@media (prefers-reduced-motion: reduce) { .signal { animation: none; } .fading { transition: none; } }
 </style>

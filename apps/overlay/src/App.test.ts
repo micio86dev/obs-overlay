@@ -26,7 +26,9 @@ const QuizBoardComponent = defineComponent({ name: "QuizBoardComponent", setup: 
 async function renderOverlay(demoMode: boolean): Promise<string> {
   vi.resetModules();
   vi.doMock("./components/AlertQueue.vue", () => ({ default: EmptyComponent }));
+  vi.doMock("./components/LiveStatusBar.vue", () => ({ default: EmptyComponent }));
   vi.doMock("./components/LiveChatFeed.vue", () => ({ default: EmptyComponent }));
+  vi.doMock("./components/PollHud.vue", () => ({ default: EmptyComponent }));
   vi.doMock("./components/PythonQuizBoard.vue", () => ({ default: QuizBoardComponent }));
   vi.doMock("./composables/useDemoEvents", () => ({ isDemoMode: () => demoMode, useDemoEvents: vi.fn() }));
   vi.doMock("./composables/useEventStream", () => ({ useEventStream: () => ({ status: computed(() => "LIVE") }) }));
@@ -43,7 +45,9 @@ async function renderOverlay(demoMode: boolean): Promise<string> {
 
 afterEach(() => {
   vi.doUnmock("./components/AlertQueue.vue");
+  vi.doUnmock("./components/LiveStatusBar.vue");
   vi.doUnmock("./components/LiveChatFeed.vue");
+  vi.doUnmock("./components/PollHud.vue");
   vi.doUnmock("./components/PythonQuizBoard.vue");
   vi.doUnmock("./composables/useDemoEvents");
   vi.doUnmock("./composables/useEventStream");

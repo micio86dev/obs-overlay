@@ -56,4 +56,16 @@ describe("EventStreamClient", () => {
     vi.advanceTimersByTime(10_000);
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
+
+  it("accepts a fresh state snapshot after reconnect without treating it as an event", () => {
+    const socket = new FakeWebSocket();
+    const states: unknown[] = [];
+    const received: OverlayEvent[] = [];
+    const client = new EventStreamClient("ws://relay.test/events", (event) => received.push(event), vi.fn(), () => socket as unknown as WebSocket, (state) => states.push(state));
+    client.start();
+    socket.emitMessage(JSON.stringify({ kind: "state", state: { status: "live", broadcastId: "video-1", concurrentViewers: 15, peakViewers: 15, session: { chatMessages: 1, superChatCount: 0, superStickerCount: 0, newMembers: 0, giftedMemberships: 0, superChatRevenueMicros: {} } } }));
+    expect(states).toHaveLength(1);
+    expect(received).toHaveLength(0);
+    client.stop();
+  });
 });

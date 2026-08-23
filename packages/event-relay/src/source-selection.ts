@@ -1,5 +1,7 @@
 import { MockSource, type EventListener, type EventSource } from "./sources/mock-source.js";
-import { normalizeChannelHandle, YouTubeSource } from "./sources/youtube-source.js";
+import { QuotaBudget } from "./quota-budget.js";
+import { normalizeChannelHandle } from "./sources/youtube-discovery.js";
+import { YouTubeSource } from "./sources/youtube-source.js";
 
 export interface SourceSelectionOptions {
   sourceName?: string;
@@ -9,12 +11,13 @@ export interface SourceSelectionOptions {
   youtubeLiveChatId?: string;
   youtubeChannelHandle?: string;
   pollIntervalMs: number;
+  dailyQuotaUnits: number;
 }
 
 /** A healthy relay source that deliberately produces no overlay events. */
 export class IdleSource implements EventSource {
   public subscribe(_listener: EventListener): () => void {
-    void _listener;
+    void _listener; // The lint config has no underscore ignore pattern.
     return () => undefined;
   }
 
@@ -43,6 +46,7 @@ export function createEventSource(options: SourceSelectionOptions): EventSource 
       options.pollIntervalMs,
       undefined,
       options.youtubeLiveChatId ? undefined : channelHandle,
+      new QuotaBudget(options.dailyQuotaUnits),
     );
   }
   throw new Error(`Unsupported EVENT_SOURCE: ${sourceName}. Use none, mock, or youtube.`);

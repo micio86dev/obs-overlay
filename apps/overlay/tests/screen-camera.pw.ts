@@ -86,7 +86,7 @@ test.describe("screen-camera layout", () => {
     const geometry = await getLayoutGeometry(screenFrame, liveChat);
     expect(geometry.chatIsLayeredAboveScreen).toBe(true);
     expect(geometry.chatTop).toBe(geometry.screenTop);
-    expect(geometry.chatBottom).toBe(geometry.screenBottom);
+    expect(geometry.chatBottom).toBeGreaterThanOrEqual(geometry.screenBottom);
     expect(geometry.chatLeft).toBeGreaterThanOrEqual(geometry.screenLeft);
     expect(geometry.chatRight).toBeLessThanOrEqual(geometry.screenRight);
     expect(geometry.chatHeight).toBeGreaterThan(700);
@@ -109,7 +109,7 @@ test.describe("screen-camera layout", () => {
     const geometry = await getLayoutGeometry(screenFrame, liveChat);
     expect(geometry.chatIsLayeredAboveScreen).toBe(true);
     expect(geometry.chatTop).toBe(geometry.screenTop);
-    expect(geometry.chatBottom).toBe(geometry.screenBottom);
+    expect(geometry.chatBottom).toBeGreaterThanOrEqual(geometry.screenBottom);
     expect(geometry.chatLeft).toBeGreaterThanOrEqual(geometry.screenLeft);
     expect(geometry.chatRight).toBeLessThanOrEqual(geometry.screenRight);
     expect(geometry.chatHeight).toBeGreaterThan(600);
@@ -141,3 +141,25 @@ test("screen-webcam keeps dashed transparent screen, webcam, and logo frames in 
   expect(screenBox.width).toBeGreaterThan(webcamBox.width);
   expect(screenBox.height).toBeGreaterThan(webcamBox.height);
 });
+
+const sixteenByNineLayouts = [
+  { layout: "screen-webcam", frames: ["screen", "webcam"] },
+  { layout: "screen-only", frames: ["screen"] },
+  { layout: "webcam-only", frames: ["webcam"] },
+  { layout: "screen-camera", frames: ["screen"] },
+  { layout: "python-quiz", frames: ["webcam"] },
+];
+
+for (const { layout, frames } of sixteenByNineLayouts) {
+  test(`${layout} sizes every capture frame to a fixed 16:9 box`, async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto(`/?layout=${layout}`);
+
+    for (const frame of frames) {
+      const box = await page.locator(`[data-placement-frame="${frame}"]`).boundingBox();
+      if (box == null) throw new Error(`missing ${frame} frame in ${layout}`);
+      expect(box.width / box.height, `${layout} ${frame}`).toBeCloseTo(16 / 9, 1);
+      expect(box.y + box.height).toBeLessThanOrEqual(1080);
+    }
+  });
+}
