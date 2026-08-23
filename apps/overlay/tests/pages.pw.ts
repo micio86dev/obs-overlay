@@ -59,3 +59,19 @@ test("an unrecognized path lands on the index page instead of silently rendering
   await expect(page.getByRole("heading", { name: "MicioDev OBS Overlay" })).toBeVisible();
   await expect(page.getByRole("link", { name: "/quiz" })).toBeVisible();
 });
+
+// base.css sets overflow:hidden on html/body/#app for the OBS-facing pages — a Browser Source
+// must never show a scrollbar. The index page is normal document content, not a fixed-size
+// overlay, so on a short (phone) viewport it needs the browser's own scroll to reach content
+// below the fold; IndexPage.vue carries an unscoped override for exactly this page.
+test("the index page scrolls on a phone-sized viewport instead of clipping content", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto("/");
+
+  const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+  const clientHeight = await page.evaluate(() => document.documentElement.clientHeight);
+  expect(scrollHeight).toBeGreaterThan(clientHeight);
+
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+});

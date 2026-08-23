@@ -52,6 +52,15 @@ function downloadObsSceneCollection(): void {
   </main>
 </template>
 
+<style>
+/* base.css sets overflow:hidden on html/body/#app for the OBS-facing pages, which must never show
+   a scrollbar — this is the one page that's normal document content instead of a fixed-size
+   overlay, and needs to scroll like any other web page on a short (e.g. phone) viewport. Unscoped
+   on purpose: html/body sit outside this component's own template, out of scoped CSS's reach, and
+   every page here is its own full document load, so this can never leak into another page. */
+html, body, #app { height: auto; min-height: 100%; overflow: auto; }
+</style>
+
 <style scoped>
 .index { max-width: 40rem; margin: 0 auto; padding: var(--space-6) var(--space-4); color: var(--color-text); background: var(--color-background); }
 h1 { color: var(--color-accent); }
