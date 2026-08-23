@@ -16,6 +16,13 @@ import { resolveLayout } from "./composables/resolve-layout";
 const layout = resolveLayout(window.location.pathname, window.location.search);
 const events = ref<OverlayEvent[]>([]);
 
+// The real alpha hole cut for each placement box is a sharp-cornered rectangle (a CSS mask
+// stretched to arbitrary --screen-w/--webcam-w dimensions can't hold a fixed-pixel border-radius
+// without distorting it), while the box's own visible border IS rounded — an OBS source shown
+// through the hole would poke past that rounded border with a square corner. One small opaque
+// corner patch per corner, painted over just the sliver outside the curve, closes that mismatch.
+const corners = ["corner-tl", "corner-tr", "corner-bl", "corner-br"] as const;
+
 function receive(event: OverlayEvent): void {
   if (events.value.some((item) => item.id === event.id)) return;
   events.value = [...events.value, event].slice(-30);
@@ -45,18 +52,24 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
     <div class="status-branding">
       <LiveIdentityBadge v-if="liveState" :state="liveState" :demo="demoMode" />
       <aside class="connection" :class="{ demo: demoMode }">{{ demoMode ? "DEMO MODE" : status }}</aside>
-      <div class="logo-frame" role="img" aria-label="Logo placement"></div>
+      <div class="logo-frame" role="img" aria-label="Logo placement">
+        <span v-for="corner in corners" :key="corner" class="corner" :class="corner" aria-hidden="true"></span>
+      </div>
     </div>
     <PythonQuizBoard v-if="layout === 'game'" class="quiz-slot" :events="events" />
     <div v-else class="slot-frame screen-frame">
       <div class="slot-grid" aria-hidden="true"></div>
-      <section class="slot screen-slot" data-placement-frame="screen" :aria-hidden="demoMode ? undefined : 'true'" :aria-label="demoMode ? 'Screen capture placement' : undefined"></section>
+      <section class="slot screen-slot" data-placement-frame="screen" :aria-hidden="demoMode ? undefined : 'true'" :aria-label="demoMode ? 'Screen capture placement' : undefined">
+        <span v-for="corner in corners" :key="corner" class="corner" :class="corner" aria-hidden="true"></span>
+      </section>
     </div>
     <div v-if="layout !== 'screen-only'" class="gap-fill column-gap-fill" aria-hidden="true"></div>
     <div v-if="layout !== 'screen-only'" class="gap-fill row-gap-fill" aria-hidden="true"></div>
     <div v-if="layout !== 'screen-only'" class="slot-frame webcam-frame">
       <div class="slot-grid" aria-hidden="true"></div>
-      <section class="slot webcam-slot" data-placement-frame="webcam" :aria-hidden="demoMode ? undefined : 'true'" :aria-label="demoMode ? 'Webcam placement' : undefined"></section>
+      <section class="slot webcam-slot" data-placement-frame="webcam" :aria-hidden="demoMode ? undefined : 'true'" :aria-label="demoMode ? 'Webcam placement' : undefined">
+        <span v-for="corner in corners" :key="corner" class="corner" :class="corner" aria-hidden="true"></span>
+      </section>
     </div>
     <div class="feed"><LiveChatFeed :events="events" /></div>
     <div class="alerts"><AlertQueue :events="events" /></div>
@@ -145,12 +158,24 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
 .connection { padding: var(--space-1) var(--space-2); color: var(--color-text-muted); border: 1px solid var(--line-color); border-radius: var(--radius-sm); }
 .connection.demo { color: var(--color-accent); text-shadow: var(--glow-soft); }
 .slot, .logo-frame { display: grid; place-items: center; border: 1px dashed var(--color-accent-deep); background: transparent; }
-.logo-frame { width: var(--logo-size); aspect-ratio: 1; border-radius: var(--radius-sm); }
+.logo-frame { position: relative; width: var(--logo-size); aspect-ratio: 1; border-radius: var(--radius-sm); --corner-radius: var(--radius-sm); }
 /* position:relative (with no explicit z-index) puts .slot in the same "positioned, z-index:auto"
    stacking bucket as its sibling .slot-grid — ordered there by DOM order, and .slot comes after
    .slot-grid in markup, so its border always paints on top instead of risking a hairline overlap
    with slot-grid's own opaque grid pattern right at the hole's edge. */
-.slot { position: relative; min-width: 0; min-height: 0; border-radius: var(--radius-md); }
+.slot { position: relative; min-width: 0; min-height: 0; border-radius: var(--radius-md); --corner-radius: var(--radius-md); }
+/* The real alpha hole behind .slot/.logo-frame is always a sharp rectangle (see the .corner-radius
+   note on `corners` in the script), but the visible border above is rounded — without these, an
+   OBS source shown through the hole pokes a square corner past that rounded border. Each patch is
+   a FIXED --corner-radius square (never stretched to the box's own --screen-w/--webcam-w, unlike
+   the mask hole itself), so the radius stays exact regardless of the box's size: a radial-gradient
+   centered on the patch's own inner corner is transparent for the rounded interior (matching the
+   border's own arc exactly, since that arc is centered at the same point) and opaque beyond it. */
+.corner { position: absolute; width: var(--corner-radius); height: var(--corner-radius); pointer-events: none; }
+.corner-tl { top: 0; left: 0; background: radial-gradient(circle at 100% 100%, transparent var(--corner-radius), var(--color-background) var(--corner-radius)); }
+.corner-tr { top: 0; right: 0; background: radial-gradient(circle at 0% 100%, transparent var(--corner-radius), var(--color-background) var(--corner-radius)); }
+.corner-bl { bottom: 0; left: 0; background: radial-gradient(circle at 100% 0%, transparent var(--corner-radius), var(--color-background) var(--corner-radius)); }
+.corner-br { bottom: 0; right: 0; background: radial-gradient(circle at 0% 0%, transparent var(--corner-radius), var(--color-background) var(--corner-radius)); }
 /* .slot-grid paints its own local copy of the page grid, minus its own 16:9 hole, so the OBS
    source under it is only ever visible inside that real hole. It is a SIBLING of .slot (the
    dashed demo guide), not its parent: CSS mask/clip-path clip an element's entire rendered

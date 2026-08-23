@@ -167,3 +167,52 @@ for (const layout of ["screen-webcam", "game"]) {
     expect(alphas[1], `${layout} row-gap strip must be opaque`).toBeGreaterThanOrEqual(250);
   });
 }
+
+/**
+ * The real alpha hole behind a placement box is always a sharp rectangle — a mask stretched to
+ * arbitrary --screen-w/--webcam-w dimensions can't carry a fixed-pixel border-radius without
+ * distorting it — while the box's own visible border IS rounded. Without the .corner patches, an
+ * OBS source shown through the hole pokes a square corner out past that rounded border. Verify the
+ * true rectangular corner is opaque (covered) while a point just inside the actual curve stays
+ * fully transparent (the real hole, untouched).
+ */
+const roundedCorners = [
+  { layout: "screen-webcam", selector: ".screen-slot" },
+  { layout: "screen-webcam", selector: ".webcam-slot" },
+  { layout: "screen-webcam", selector: ".logo-frame" },
+];
+
+for (const { layout, selector } of roundedCorners) {
+  test(`${selector} on ${layout} covers its sharp corner but keeps the rounded interior transparent`, async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto(`/${layout}`);
+
+    const box = await page.locator(selector).boundingBox();
+    if (box == null) throw new Error(`missing ${selector} in ${layout}`);
+
+    const shot = await page.screenshot({ omitBackground: true });
+    const alphas = await page.evaluate(
+      async ({ base64, points }) => {
+        const img = new Image();
+        img.src = "data:image/png;base64," + base64;
+        await img.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        return points.map(({ x, y }) => ctx.getImageData(x, y, 1, 1).data[3]);
+      },
+      {
+        base64: shot.toString("base64"),
+        points: [
+          { x: Math.round(box.x + 1), y: Math.round(box.y + 1) },
+          { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) },
+        ],
+      }
+    );
+
+    expect(alphas[0], `${selector} on ${layout}: the sharp rectangular corner must be opaque`).toBeGreaterThanOrEqual(250);
+    expect(alphas[1], `${selector} on ${layout}: the box's own interior must stay fully transparent`).toBeLessThanOrEqual(5);
+  });
+}
