@@ -178,7 +178,7 @@ Every overlay piece is its own page, so it is its own **Browser Source**. There 
 | Background | `http://localhost:5173/background` | Full-bleed grid background. Bottom of the stack — opaque on purpose. |
 | Navbar | `http://localhost:5173/navbar` | Brand copy and the live connection badge, top corners. |
 | Footer | `http://localhost:5173/footer` | Viewer/revenue/member stats bar, bottom. |
-| Chat | `http://localhost:5173/chat` | Live chat panel. |
+| Chat | `http://localhost:5173/chat` | Live chat panel — fills its Browser Source edge-to-edge, so size and position it to wherever and however big you want the panel. |
 | Alerts | `http://localhost:5173/alerts` | Alert queue, floating emoji reactions, and the poll HUD. |
 | Quiz | `http://localhost:5173/quiz` | Python quiz board (replaces a screen-capture Browser Source when running the game). |
 | Placement | `http://localhost:5173/placement?label=Screen&radius=md` | Generic reusable frame — add once per capture source (see below). |
@@ -188,14 +188,15 @@ Every overlay piece is its own page, so it is its own **Browser Source**. There 
 1. Add `/background` first, sized to the full canvas, and put it at the **bottom** of the source list.
 2. Add your display capture and camera as native OBS sources (Display Capture, Video Capture Device) above the background.
 3. Add `/placement` once per capture source, sized and positioned in OBS to exactly cover it, **above** that capture source. It draws only a dashed border — the fully transparent interior lets the real capture show through, and OBS's own transform (not this app) now owns its size, position, and aspect ratio. Use the `label` query param for a readable source name in Demo Mode (e.g. `?label=Webcam`) and `radius=sm|md|none` to match the border's corner radius to what you're framing.
-4. Add `/navbar`, `/footer`, `/chat`, and `/alerts` above everything, each full-canvas — their content self-positions to a corner or edge, so the source itself can stay full-size.
-5. For the quiz game, swap your screen-capture source and its `/placement` frame for `/quiz`, sized to the same region.
+4. Add `/navbar`, `/footer`, and `/alerts` above everything, each full-canvas — their content self-positions to a corner or edge, so the source itself can stay full-size.
+5. Add `/chat` sized and positioned to wherever you want the panel: unlike navbar/footer/alerts, it fills its Browser Source edge-to-edge rather than anchoring to a corner, so a bigger source shows more messages instead of leaving empty space.
+6. For the quiz game, swap your screen-capture source and its `/placement` frame for `/quiz`, sized to the same region.
 
 Every page besides `/background` has a fully transparent document background, so stacking order — not layout math — is what keeps lower sources visible. In Demo Mode, `/placement`'s label is exposed to assistive tech as a visible placement hint; it is `aria-hidden` in live mode. The header CTA, `ISCRIVITI CAGNACCIO!`, is intentional permanent brand copy, not a Demo Mode placeholder.
 
 Recommended Browser Source settings, for every source above:
 
-- Set the width and height to match the region it covers (the full canvas for background/navbar/footer/chat/alerts, the exact capture region for a placement frame).
+- Set the width and height to match the region it covers (the full canvas for background/navbar/footer/alerts, wherever and however big you want the chat panel, the exact capture region for a placement frame).
 - Enable **Refresh browser when scene becomes active**.
 - Enable **Control audio via OBS** on the `/alerts` source if alert sounds should be mixed and monitored by OBS.
 - Do not enable a custom CSS override unless you understand its effect on the overlay.

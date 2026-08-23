@@ -24,6 +24,15 @@ test("chat renders the live chat panel", async ({ page }) => {
   await expect(page.getByLabel("Live chat")).toBeVisible();
 });
 
+// OBS owns this source's size and position, not the overlay — a bigger source must show more
+// messages instead of leaving empty transparent space around a corner-anchored card.
+test("the chat panel fills its Browser Source edge-to-edge, whatever size OBS gives it", async ({ page }) => {
+  await page.setViewportSize({ width: 500, height: 900 });
+  await page.goto("/chat");
+  const box = await page.getByLabel("Live chat").boundingBox();
+  expect(box).toEqual(expect.objectContaining({ x: 0, y: 0, width: 500, height: 900 }));
+});
+
 test("alerts renders its own page, independent of the chat feed", async ({ page }) => {
   await page.goto("/alerts");
   await expect(page.locator(".alerts-page")).toBeVisible();
