@@ -183,7 +183,13 @@ Every overlay piece is its own page, so it is its own **Browser Source**. There 
 | Quiz | `http://localhost:5173/quiz` | Python quiz board (replaces a screen-capture Browser Source when running the game). |
 | Placement | `http://localhost:5173/placement?label=Screen&radius=md` | Generic reusable frame — add once per capture source (see below). |
 
-### Building a scene
+### One-click setup
+
+Open the app root (`http://localhost:5173/` or your deployed URL) and click **Download OBS scene collection**. It downloads a `.json` file, ready for OBS's **Scene Collection → Import**, that adds every page above as its own Browser Source, already stacked in the right order and sized on a 1920×1080 canvas — three of them are `/placement` frames for the logo, screen, and webcam. It contains only Browser Sources, so the same file works unchanged on Windows, macOS, and Linux (capture-device sources are OS-specific, so there's no cross-platform packaging problem to solve — this sidesteps it rather than generating a package per OS). After importing, add your own Display Capture and webcam sources and drag the placement frames onto them.
+
+### Building a scene by hand
+
+Skip this if the one-click import above already did it; read on to understand what it built, or to lay it out yourself.
 
 1. Add `/background` first, sized to the full canvas, and put it at the **bottom** of the source list.
 2. Add your display capture and camera as native OBS sources (Display Capture, Video Capture Device) above the background.
