@@ -50,10 +50,10 @@ test("screen-webcam keeps dashed transparent screen, webcam, and logo frames in 
   expect(screenBox.height).toBeGreaterThan(webcamBox.height);
 });
 
-// The screen frame targets a MacBook Pro 14"/16" M1 Pro/Max panel (~1.54:1, 3024/1964), not
-// broadcast 16:9 — a 16:9 box would letterbox a capture of that taller display. The webcam frame
-// stays 16:9, the standard ratio for webcams regardless of what screen is being shared.
-const SCREEN_RATIO = 3024 / 1964;
+// The screen frame targets 16:10 (1.6:1), between broadcast 16:9 and a MacBook's actual panel
+// ratio, not 16:9 — a 16:9 box would letterbox a laptop screen capture. The webcam frame stays
+// 16:9, the standard ratio for webcams regardless of what screen is being shared.
+const SCREEN_RATIO = 16 / 10;
 const sixteenByNineLayouts = [
   { layout: "screen-webcam", frames: [{ name: "screen", ratio: SCREEN_RATIO }, { name: "webcam", ratio: 16 / 9 }] },
   { layout: "screen-only", frames: [{ name: "screen", ratio: SCREEN_RATIO }] },

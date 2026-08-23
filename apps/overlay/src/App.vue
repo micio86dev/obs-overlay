@@ -76,12 +76,12 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
   --content-w: calc(100vw - var(--pad-x) * 2); --content-h: calc(100vh - var(--pad-top) - var(--pad-bottom));
   --side-col-w: clamp(14rem, 24vw, 24rem);
   --two-col-w: calc(var(--content-w) - var(--side-col-w) - var(--space-4));
-  /* The screen-share box targets a MacBook Pro 14"/16" M1 Pro/Max panel (3024x1964 / 3456x2234,
-     both ~1.54:1) instead of broadcast-standard 16:9 (1.78:1): a 16:9 box letterboxes a capture of
-     that display, since its native aspect ratio is taller than 16:9. The webcam box stays 16:9 on
-     purpose — webcams are standard 16:9 regardless of what laptop panel is being screen-shared. */
-  --screen-only-w: min(var(--content-w), calc(var(--content-h) * 3024 / 1964));
-  --split-w: min(var(--two-col-w), calc(var(--content-h) * 3024 / 1964));
+  /* The screen-share box targets 16:10 (1.6:1), between broadcast-standard 16:9 (1.78:1) and a
+     MacBook's actual panel ratio, instead of 16:9: a 16:9 box letterboxes a laptop screen capture,
+     since MacBook panels are taller than 16:9. The webcam box stays 16:9 on purpose — webcams are
+     standard 16:9 regardless of what laptop panel is being screen-shared. */
+  --screen-only-w: min(var(--content-w), calc(var(--content-h) * 16 / 10));
+  --split-w: min(var(--two-col-w), calc(var(--content-h) * 16 / 10));
   --webcam-w: min(var(--side-col-w), calc(var(--content-h) * 16 / 9));
   --webcam-h: calc(var(--webcam-w) * 9 / 16);
   --screen-side-gutter: max(0px, calc((var(--content-w) - var(--screen-only-w)) / 2));
@@ -94,8 +94,8 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
   position: relative; display: grid; width: 100vw; height: 100vh;
   padding: var(--pad-top) var(--pad-x) var(--pad-bottom); isolation: isolate;
 }
-.layout-screen-webcam { --screen-w: var(--split-w); --screen-h: calc(var(--split-w) * 1964 / 3024); }
-.layout-screen-only { --screen-w: var(--screen-only-w); --screen-h: calc(var(--screen-only-w) * 1964 / 3024); }
+.layout-screen-webcam { --screen-w: var(--split-w); --screen-h: calc(var(--split-w) * 10 / 16); }
+.layout-screen-only { --screen-w: var(--screen-only-w); --screen-h: calc(var(--screen-only-w) * 10 / 16); }
 /* The grid pattern paints everywhere in the padding band EXCEPT the content box: two mask
    layers (full rect, content-box rect) combine with "exclude" to cut that hole, so the grid
    never has to know which layout is active — it only needs the padding thickness. The content
@@ -195,8 +195,8 @@ const visiblePoll = computed(() => selectVisiblePoll(events.value, now.value));
 @media (orientation: portrait) {
   .overlay {
     --pad-top: 7rem;
-    --screen-w: min(var(--content-w), calc(var(--content-h) * 0.55 * 3024 / 1964));
-    --screen-h: calc(var(--screen-w) * 1964 / 3024);
+    --screen-w: min(var(--content-w), calc(var(--content-h) * 0.55 * 16 / 10));
+    --screen-h: calc(var(--screen-w) * 10 / 16);
     --webcam-w: min(var(--content-w), calc(var(--content-h) * 0.3 * 16 / 9));
   }
   .layout-screen-webcam, .layout-game {

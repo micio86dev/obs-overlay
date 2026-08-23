@@ -23,7 +23,11 @@ const ended = computed(() => props.poll.pollStatus === "ended");
 </template>
 
 <style scoped>
-.poll-hud { position: absolute; z-index: 3; right: var(--space-5); bottom: 4rem; width: min(20rem, 28vw); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-color); border-radius: var(--radius-sm); background: var(--color-surface-transparent); box-shadow: var(--glow-soft); font-size: clamp(.65rem, .9vw, .8rem); backdrop-filter: blur(4px); }
+/* Anchored bottom-LEFT, not bottom-right: every layout puts the chat feed somewhere along the
+   right edge (a side column in screen-webcam/game, a full-height strip in screen-only) — a
+   bottom-right poll would sit on top of it. The bottom-left corner instead falls over the
+   screen/webcam capture area, which nothing else occupies at that corner. */
+.poll-hud { position: absolute; z-index: 3; left: var(--space-5); bottom: 4rem; width: min(20rem, 28vw); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-color); border-radius: var(--radius-sm); background: var(--color-surface-transparent); box-shadow: var(--glow-soft); font-size: clamp(.65rem, .9vw, .8rem); backdrop-filter: blur(4px); }
 .poll-hud.ended { border-color: var(--color-accent-deep); }
 .eyebrow { color: var(--color-accent); letter-spacing: .1em; text-shadow: var(--glow-soft); }
 .question { margin-top: var(--space-1); color: var(--color-text); overflow-wrap: anywhere; }
@@ -33,5 +37,5 @@ li { position: relative; display: flex; align-items: baseline; justify-content: 
 .text, .share { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .share { color: var(--color-accent-bright); }
 @media (prefers-reduced-motion: reduce) { .bar { transition: none; } }
-@media (max-width: 700px) { .poll-hud { right: var(--space-3); bottom: 3.25rem; width: min(16rem, calc(100vw - var(--space-6))); } }
+@media (max-width: 700px) { .poll-hud { left: var(--space-3); bottom: 3.25rem; width: min(16rem, calc(100vw - var(--space-6))); } }
 </style>
