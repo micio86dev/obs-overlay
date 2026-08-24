@@ -29,6 +29,7 @@ export interface PublicQuizResult {
 
 export interface PublicQuizRanking {
   author: string;
+  avatarUrl?: string;
   correctAnswers: number;
   answeredQuestions: number;
   percentage: number;
@@ -59,6 +60,7 @@ export interface QuizGameOptions {
 
 interface PlayerScore {
   author: string;
+  avatarUrl?: string;
   answers: number;
   correct: number;
 }
@@ -132,8 +134,10 @@ export class QuizGame {
     if (!score && this.scores.size >= this.maxParticipants) return false;
     const answer = Number(rawAnswer) as QuizOption;
     this.answers.set(participantId, answer);
-    const nextScore = score ?? { author: event.author.trim() || "Spettatore", answers: 0, correct: 0 };
+    const nextScore = score ?? { author: event.author.trim() || "Spettatore", avatarUrl: undefined, answers: 0, correct: 0 };
     nextScore.answers += 1;
+    // Keep the earliest known avatar rather than dropping it on a later message that omits one.
+    nextScore.avatarUrl = event.avatarUrl ?? nextScore.avatarUrl;
     if (answer === this.currentQuestion.correctOption) nextScore.correct += 1;
     this.scores.set(participantId, nextScore);
     return true;
@@ -143,7 +147,7 @@ export class QuizGame {
     const current = this.currentQuestion;
     const currentResponses = responses(this.answers);
     const leaderboard = [...this.scores.values()]
-      .map((score) => ({ author: score.author, correctAnswers: score.correct, answeredQuestions: score.answers, percentage: Math.round((score.correct / score.answers) * 100) }))
+      .map((score) => ({ author: score.author, avatarUrl: score.avatarUrl, correctAnswers: score.correct, answeredQuestions: score.answers, percentage: Math.round((score.correct / score.answers) * 100) }))
       .sort((left, right) => right.correctAnswers - left.correctAnswers || right.answeredQuestions - left.answeredQuestions || left.author.localeCompare(right.author));
     return {
       phase: this.phase,
