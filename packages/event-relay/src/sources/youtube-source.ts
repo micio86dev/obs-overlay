@@ -11,8 +11,8 @@ import { isYouTubeMessage, normalizeYouTubeMessage, type YouTubeMessage } from "
 const minimumPollIntervalMs = 1_000;
 const maximumPollIntervalMs = 60_000;
 const defaultFetchTimeoutMs = 15_000;
-const initialDiscoveryRetryMs = 5 * 60_000;
-const maximumDiscoveryRetryMs = 60 * 60_000;
+const initialDiscoveryRetryMs = 60_000;
+const maximumDiscoveryRetryMs = 5 * 60_000;
 const maximumChatRetryMs = 5 * 60_000;
 const degradedChatPollMs = 60_000;
 
@@ -148,8 +148,8 @@ export class YouTubeSource implements EventSource {
       if (!this.liveChatId) {
         if (!this.channelHandle) throw new Error("A YouTube live chat ID or channel handle is required");
         resolvingLiveChat = true;
-        // channels.list + search.list + videos.list; search alone is 100 of these units.
-        const discoveryUnits = quotaUnits.channels + quotaUnits.search + quotaUnits.videos;
+        // channels.list + playlistItems.list + videos.list, one unit each.
+        const discoveryUnits = quotaUnits.channels + quotaUnits.playlistItems + quotaUnits.videos;
         if (this.parkOnExhaustedQuota(generation, discoveryUnits)) return;
         this.budget.spend(discoveryUnits);
         const broadcast = await discoverActiveBroadcast(this.apiKey, this.channelHandle, abortController.signal);

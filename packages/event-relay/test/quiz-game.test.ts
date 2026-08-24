@@ -22,8 +22,8 @@ const questions: readonly PythonQuestion[] = Array.from({ length: 10 }, (_, inde
   difficulty: "facile",
 }));
 
-function chat(authorId: string, message: string): ChatEvent {
-  return { id: `${authorId}-${message}`, type: "chat", author: authorId, authorId, message, occurredAt: "2026-08-22T00:00:00.000Z" };
+function chat(authorId: string, message: string, avatarUrl?: string): ChatEvent {
+  return { id: `${authorId}-${message}`, type: "chat", author: authorId, authorId, avatarUrl, message, occurredAt: "2026-08-22T00:00:00.000Z" };
 }
 
 test("does not disclose answers until the server-owned question deadline and caps participants", () => {
@@ -40,6 +40,31 @@ test("does not disclose answers until the server-owned question deadline and cap
   assert.equal(game.state.phase, "results");
   assert.equal(game.state.result?.correctOption, 2);
   assert.equal(game.state.result?.responses[1].count, 1);
+});
+
+test("carries each player's avatar from chat into the leaderboard", () => {
+  const scheduler = new FakeScheduler();
+  const game = new QuizGame({ questions, scheduler, random: () => 0, questionDurationMs: 30_000, resultsDurationMs: 1_000, finalDurationMs: 1_000 });
+  game.start();
+
+  game.submit(chat("opaque-a", "2", "https://yt3.example/a.jpg"));
+  scheduler.advance(30_000);
+
+  assert.equal(game.state.leaderboard[0]?.avatarUrl, "https://yt3.example/a.jpg");
+});
+
+test("keeps the first known avatar rather than dropping it when a later message omits one", () => {
+  const scheduler = new FakeScheduler();
+  const game = new QuizGame({ questions, scheduler, random: () => 0, questionDurationMs: 30_000, resultsDurationMs: 1_000, finalDurationMs: 1_000 });
+  game.start();
+
+  game.submit(chat("opaque-a", "2", "https://yt3.example/a.jpg"));
+  scheduler.advance(30_000);
+  scheduler.advance(1_000);
+  game.submit(chat("opaque-a", "2"));
+  scheduler.advance(30_000);
+
+  assert.equal(game.state.leaderboard[0]?.avatarUrl, "https://yt3.example/a.jpg");
 });
 
 test("an evicted provider identity cannot submit twice during the active round", () => {

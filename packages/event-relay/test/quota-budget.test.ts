@@ -6,7 +6,7 @@ const day = 24 * 60 * 60 * 1_000;
 const noon = Date.parse("2026-08-23T12:00:00.000Z");
 
 test("documents the official unit cost of every endpoint the relay calls", () => {
-  assert.deepEqual(quotaUnits, { liveChatMessages: 5, search: 100, channels: 1, videos: 1 });
+  assert.deepEqual(quotaUnits, { liveChatMessages: 5, playlistItems: 1, channels: 1, videos: 1 });
 });
 
 test("stays normal below the degrade threshold and degrades at eighty percent", () => {
@@ -37,7 +37,7 @@ test("resets on the next UTC midnight and reports the delay until it", () => {
   now = Date.parse("2026-08-24T00:00:00.000Z");
   assert.equal(budget.pressure, "normal");
   assert.equal(budget.spent, 0);
-  assert.equal(budget.canSpend(quotaUnits.search), true);
+  assert.equal(budget.canSpend(quotaUnits.liveChatMessages), true);
 });
 
 test("a multi-day gap resets exactly once rather than accumulating", () => {
@@ -56,5 +56,5 @@ test("an unbounded budget never applies pressure", () => {
 
   budget.spend(1_000_000);
   assert.equal(budget.pressure, "normal");
-  assert.equal(budget.canSpend(quotaUnits.search), true);
+  assert.equal(budget.canSpend(quotaUnits.liveChatMessages), true);
 });

@@ -3,7 +3,7 @@
  * The default project allowance is 10,000 units/day, so `liveChatMessages` polling
  * dominates: one poll every 10s costs 5 * 8,640 = 43,200 units/day on its own.
  */
-export const quotaUnits = { liveChatMessages: 5, search: 100, channels: 1, videos: 1 } as const;
+export const quotaUnits = { liveChatMessages: 5, playlistItems: 1, channels: 1, videos: 1 } as const;
 
 export type QuotaPressure = "normal" | "degraded" | "exhausted";
 

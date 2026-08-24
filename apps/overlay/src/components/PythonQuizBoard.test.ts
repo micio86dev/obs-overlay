@@ -25,6 +25,26 @@ describe("PythonQuizBoard", () => {
     expect(host.textContent).not.toContain("Risposta corretta");
   });
 
+  it("shows each player's avatar next to their name on the final ranking", async () => {
+    const finalState: PublicQuizState = {
+      ...questionState,
+      phase: "final",
+      leaderboard: [
+        { author: "MicioFan", avatarUrl: "https://yt3.example/a.jpg", correctAnswers: 5, answeredQuestions: 5, percentage: 100 },
+        { author: "Anon", correctAnswers: 1, answeredQuestions: 3, percentage: 33 },
+      ],
+    };
+    const host = document.createElement("div"); document.body.append(host);
+    mountedApp = createApp(defineComponent({ setup: () => () => h(PythonQuizBoard, { events: [], stateLoader: async () => finalState }) }));
+    mountedApp.mount(host);
+    await Promise.resolve(); await nextTick();
+
+    const avatar = host.querySelector(".final-ranking img") as HTMLImageElement | null;
+    expect(avatar?.src).toBe("https://yt3.example/a.jpg");
+    expect(avatar?.alt).toBe("");
+    expect(host.querySelectorAll(".final-ranking li")[1].querySelector("img")).toBeNull();
+  });
+
   it("shows a retrying fallback after a failed state request", async () => {
     const host = document.createElement("div"); document.body.append(host);
     mountedApp = createApp(defineComponent({ setup: () => () => h(PythonQuizBoard, { events: [], stateLoader: async () => { throw new Error("relay unavailable"); } }) }));

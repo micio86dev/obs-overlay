@@ -10,7 +10,7 @@ export interface PublicQuizState {
   question: { id: string; prompt: string; options: readonly [string, string, string, string]; difficulty: QuizDifficulty };
   responses: readonly { option: QuizOption; count: number; percentage: number }[];
   result?: { correctOption: QuizOption; responses: readonly { option: QuizOption; count: number; percentage: number }[] };
-  leaderboard: readonly { author: string; correctAnswers: number; answeredQuestions: number; percentage: number }[];
+  leaderboard: readonly { author: string; avatarUrl?: string; correctAnswers: number; answeredQuestions: number; percentage: number }[];
 }
 
 export type QuizStateFetcher = (url: string, init: RequestInit) => Promise<Response>;
@@ -24,6 +24,7 @@ function isState(value: unknown): value is PublicQuizState {
     && Number.isFinite((response as { percentage?: unknown }).percentage);
   const validRanking = (player: unknown): boolean => !!player && typeof player === "object"
     && typeof (player as { author?: unknown }).author === "string"
+    && ((player as { avatarUrl?: unknown }).avatarUrl === undefined || typeof (player as { avatarUrl?: unknown }).avatarUrl === "string")
     && Number.isFinite((player as { correctAnswers?: unknown }).correctAnswers)
     && Number.isFinite((player as { answeredQuestions?: unknown }).answeredQuestions)
     && Number.isFinite((player as { percentage?: unknown }).percentage);

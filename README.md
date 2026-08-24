@@ -124,7 +124,7 @@ For a multi-hour stream, request a quota increase for your Google Cloud project 
 
 #### No active live broadcast
 
-The relay remains healthy and emits no events while the channel is offline. To avoid exhausting YouTube API quota, active-live discovery retries after 5, 10, 20, 40, and then every 60 minutes. It also returns to discovery when the current live chat ends.
+The relay remains healthy and emits no events while the channel is offline. Active-live discovery costs 3 quota units per attempt — `channels.list` for the uploads playlist, `playlistItems.list` for the recent uploads, and one batched `videos.list` — so it retries after 1, 2, 4, and then every 5 minutes. It also returns to discovery when the current live chat ends.
 
 `YOUTUBE_LIVE_CHAT_ID` is supported as an optional one-broadcast override, but is normally unnecessary when `YOUTUBE_CHANNEL_HANDLE` is set:
 
