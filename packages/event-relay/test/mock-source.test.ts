@@ -20,7 +20,7 @@ test("YouTubeSource exponentially backs off active-live discovery when no live i
   console.info = () => undefined;
   globalThis.fetch = ((input) => {
     const url = new URL(String(input));
-    const payload = url.pathname.endsWith("/channels") ? { items: [{ id: "channel-1" }] } : { items: [] };
+    const payload = url.pathname.endsWith("/channels") ? { items: [{ id: "channel-1", contentDetails: { relatedPlaylists: { uploads: "UUchannel-1" } } }] } : { items: [] };
     return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
   }) as typeof fetch;
   globalThis.setTimeout = ((handler: TimerHandler, delay = 0) => {
@@ -37,11 +37,11 @@ test("YouTubeSource exponentially backs off active-live discovery when no live i
     source = new YouTubeSource("key", undefined, 1_000, 15_000, "miciodev");
     source.start();
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
-    const firstRetry = timers.find((timer) => timer.delay === 300_000 && !timer.cleared);
+    const firstRetry = timers.find((timer) => timer.delay === 60_000 && !timer.cleared);
     assert.ok(firstRetry);
     firstRetry.handler();
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
-    assert.ok(timers.some((timer) => timer.delay === 600_000 && !timer.cleared));
+    assert.ok(timers.some((timer) => timer.delay === 120_000 && !timer.cleared));
   } finally {
     source?.stop();
     globalThis.fetch = originalFetch;
@@ -66,13 +66,13 @@ test("YouTubeSource rebinds to a newly discovered live chat after the previous c
     const url = new URL(String(input));
     if (url.pathname.endsWith("/channels")) {
       discovery += 1;
-      return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "channel-1" }] }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "channel-1", contentDetails: { relatedPlaylists: { uploads: "UUchannel-1" } } }] }), { status: 200 }));
     }
-    if (url.pathname.endsWith("/search")) {
-      return Promise.resolve(new Response(JSON.stringify({ items: [{ id: { videoId: `video-${discovery}` } }] }), { status: 200 }));
+    if (url.pathname.endsWith("/playlistItems")) {
+      return Promise.resolve(new Response(JSON.stringify({ items: [{ contentDetails: { videoId: `video-${discovery}` } }] }), { status: 200 }));
     }
     if (url.pathname.endsWith("/videos")) {
-      return Promise.resolve(new Response(JSON.stringify({ items: [{ liveStreamingDetails: { activeLiveChatId: `chat-${discovery}`, actualStartTime: "2026-08-23T12:00:00.000Z" } }] }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ items: [{ id: `video-${discovery}`, liveStreamingDetails: { activeLiveChatId: `chat-${discovery}`, actualStartTime: "2026-08-23T12:00:00.000Z" } }] }), { status: 200 }));
     }
     liveChatIds.push(url.searchParams.get("liveChatId") ?? "");
     return Promise.resolve(discovery === 1
@@ -102,7 +102,7 @@ test("YouTubeSource rebinds to a newly discovered live chat after the previous c
     source.subscribeState((state) => states.push(`${state.status}:${state.broadcastId ?? ""}`));
     source.start();
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
-    const retry = timers.find((timer) => timer.delay === 300_000 && !timer.cleared);
+    const retry = timers.find((timer) => timer.delay === 60_000 && !timer.cleared);
     assert.ok(retry);
     retry.handler();
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
@@ -405,11 +405,11 @@ test("YouTubeSource invalidates metrics work on stop and backs off failed metric
   globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => { const timer = timers[Number(id) - 1]; if (timer) timer.cleared = true; }) as typeof clearTimeout;
   globalThis.fetch = ((input, init) => {
     const url = new URL(String(input));
-    if (url.pathname.endsWith("/channels")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "channel" }] })));
-    if (url.pathname.endsWith("/search")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: { videoId: "video-1" } }] })));
+    if (url.pathname.endsWith("/channels")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "channel", contentDetails: { relatedPlaylists: { uploads: "UUchannel" } } }] })));
+    if (url.pathname.endsWith("/playlistItems")) return Promise.resolve(new Response(JSON.stringify({ items: [{ contentDetails: { videoId: "video-1" } }] })));
     if (url.pathname.endsWith("/liveChat/messages")) return Promise.resolve(new Response(JSON.stringify({ items: [], pollingIntervalMillis: 60_000 })));
     videoFetches += 1;
-    if (videoFetches === 1) return Promise.resolve(new Response(JSON.stringify({ items: [{ liveStreamingDetails: { activeLiveChatId: "chat-1", actualStartTime: "2026-08-23T12:00:00.000Z" } }] })));
+    if (videoFetches === 1) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "video-1", liveStreamingDetails: { activeLiveChatId: "chat-1", actualStartTime: "2026-08-23T12:00:00.000Z" } }] })));
     if (videoFetches < 4) return Promise.resolve(new Response(JSON.stringify({ error: {} }), { status: 429 }));
     metricSignal = init?.signal;
     return new Promise<Response>((resolve) => { resolveStaleMetric = resolve; });
@@ -488,12 +488,12 @@ test("metrics completion aborts an in-flight chat poll before rediscovery", asyn
   globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => { const timer = timers[Number(id) - 1]; if (timer) timer.cleared = true; }) as typeof clearTimeout;
   globalThis.fetch = ((input, init) => {
     const url = new URL(String(input));
-    if (url.pathname.endsWith("/channels")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "channel" }] })));
-    if (url.pathname.endsWith("/search")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: { videoId: "video-1" } }] })));
+    if (url.pathname.endsWith("/channels")) return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "channel", contentDetails: { relatedPlaylists: { uploads: "UUchannel" } } }] })));
+    if (url.pathname.endsWith("/playlistItems")) return Promise.resolve(new Response(JSON.stringify({ items: [{ contentDetails: { videoId: "video-1" } }] })));
     if (url.pathname.endsWith("/videos")) {
       videoFetches += 1;
       const details = videoFetches === 1 ? { activeLiveChatId: "chat-1", actualStartTime: "2026-08-23T12:00:00.000Z" } : { activeLiveChatId: "chat-1", actualStartTime: "2026-08-23T12:00:00.000Z", actualEndTime: "2026-08-23T12:30:00.000Z" };
-      return Promise.resolve(new Response(JSON.stringify({ items: [{ liveStreamingDetails: details }] })));
+      return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "video-1", liveStreamingDetails: details }] })));
     }
     chatSignal = init?.signal;
     return new Promise<Response>((resolve) => { resolveChat = resolve; });
@@ -510,7 +510,7 @@ test("metrics completion aborts an in-flight chat poll before rediscovery", asyn
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
     assert.equal(chatSignal?.aborted, true);
     assert.ok(states.includes("complete:video-1"));
-    assert.ok(timers.some((timer) => timer.delay === 300_000 && !timer.cleared));
+    assert.ok(timers.some((timer) => timer.delay === 60_000 && !timer.cleared));
     resolveChat?.(new Response(JSON.stringify({ items: [{ id: "stale", snippet: { type: "textMessageEvent", publishedAt: "2026-08-23T12:00:00.000Z", displayMessage: "late" } }] })));
     await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
     assert.deepEqual(events, []);

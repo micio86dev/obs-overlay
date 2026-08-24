@@ -22,15 +22,14 @@ export interface ActiveBroadcast {
   state: Omit<LiveState, "session">;
 }
 
-export async function fetchBroadcast(apiKey: string, videoId: string, signal?: AbortSignal): Promise<ActiveBroadcast | undefined> {
-  const videoUrl = new URL(`${youtubeApiBaseUrl}/videos`);
-  videoUrl.searchParams.set("part", "liveStreamingDetails");
-  videoUrl.searchParams.set("id", videoId);
-  videoUrl.searchParams.set("key", apiKey);
-  const payload = await fetchYouTubePayload(videoUrl, signal);
-  const item = Array.isArray(payload.items) && isRecord(payload.items[0]) ? payload.items[0] : undefined;
-  const details = item && isRecord(item.liveStreamingDetails) ? item.liveStreamingDetails : undefined;
+const maximumRecentUploadsChecked = 10;
+
+/** videos.list always returns the id, so a batched lookup still knows which broadcast it read. */
+function toActiveBroadcast(item: Record<string, unknown>, fallbackVideoId?: string): ActiveBroadcast | undefined {
+  const details = isRecord(item.liveStreamingDetails) ? item.liveStreamingDetails : undefined;
   if (!details) return undefined;
+  const videoId = getString(item, "id") ?? fallbackVideoId;
+  if (!videoId) return undefined;
   const startedAt = getString(details, "actualStartTime");
   const endedAt = getString(details, "actualEndTime");
   const scheduledStartAt = getString(details, "scheduledStartTime");
@@ -43,6 +42,56 @@ export async function fetchBroadcast(apiKey: string, videoId: string, signal?: A
     state: { broadcastId: videoId, status, startedAt, endedAt, scheduledStartAt, concurrentViewers },
   };
 }
+
+/** One videos.list call covers every candidate: the cost is per request, not per id. */
+async function fetchVideoItems(apiKey: string, videoIds: string[], signal?: AbortSignal): Promise<Record<string, unknown>[]> {
+  const videoUrl = new URL(`${youtubeApiBaseUrl}/videos`);
+  videoUrl.searchParams.set("part", "liveStreamingDetails");
+  videoUrl.searchParams.set("id", videoIds.join(","));
+  videoUrl.searchParams.set("key", apiKey);
+  const payload = await fetchYouTubePayload(videoUrl, signal);
+  return Array.isArray(payload.items) ? payload.items.filter(isRecord) : [];
+}
+
+export async function fetchBroadcast(apiKey: string, videoId: string, signal?: AbortSignal): Promise<ActiveBroadcast | undefined> {
+  const [item] = await fetchVideoItems(apiKey, [videoId], signal);
+  return item ? toActiveBroadcast(item, videoId) : undefined;
+}
+
+async function fetchUploadsPlaylistId(apiKey: string, handle: string, signal?: AbortSignal): Promise<string | undefined> {
+  const channelUrl = new URL(`${youtubeApiBaseUrl}/channels`);
+  channelUrl.searchParams.set("part", "contentDetails");
+  channelUrl.searchParams.set("forHandle", handle);
+  channelUrl.searchParams.set("key", apiKey);
+  const payload = await fetchYouTubePayload(channelUrl, signal);
+  const item = Array.isArray(payload.items) && isRecord(payload.items[0]) ? payload.items[0] : undefined;
+  const contentDetails = item && isRecord(item.contentDetails) ? item.contentDetails : undefined;
+  const relatedPlaylists = contentDetails && isRecord(contentDetails.relatedPlaylists) ? contentDetails.relatedPlaylists : undefined;
+  return relatedPlaylists ? getString(relatedPlaylists, "uploads") : undefined;
+}
+
+async function fetchRecentUploadIds(apiKey: string, playlistId: string, signal?: AbortSignal): Promise<string[]> {
+  const playlistUrl = new URL(`${youtubeApiBaseUrl}/playlistItems`);
+  playlistUrl.searchParams.set("part", "contentDetails");
+  playlistUrl.searchParams.set("playlistId", playlistId);
+  playlistUrl.searchParams.set("maxResults", String(maximumRecentUploadsChecked));
+  playlistUrl.searchParams.set("key", apiKey);
+  const payload = await fetchYouTubePayload(playlistUrl, signal);
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const videoIds: string[] = [];
+  for (const item of items) {
+    if (!isRecord(item) || !isRecord(item.contentDetails)) continue;
+    const videoId = getString(item.contentDetails, "videoId");
+    if (videoId) videoIds.push(videoId);
+  }
+  return videoIds;
+}
+
+/**
+ * Finds the channel's current live through its uploads playlist. search.list answers the same
+ * question but costs 100 of the 10,000 daily quota units, which is what forced discovery into
+ * hour-long retries; channels + playlistItems + videos costs 3 and can run every minute instead.
+ */
 export async function discoverActiveBroadcast(
   apiKey: string,
   channelHandle: string,
@@ -50,25 +99,15 @@ export async function discoverActiveBroadcast(
 ): Promise<ActiveBroadcast | undefined> {
   const handle = normalizeChannelHandle(channelHandle);
   if (!handle) return undefined;
-  const channelUrl = new URL(`${youtubeApiBaseUrl}/channels`);
-  channelUrl.searchParams.set("part", "id");
-  channelUrl.searchParams.set("forHandle", handle);
-  channelUrl.searchParams.set("key", apiKey);
-  const channelPayload = await fetchYouTubePayload(channelUrl, signal);
-  const channelItem = Array.isArray(channelPayload.items) && isRecord(channelPayload.items[0]) ? channelPayload.items[0] : undefined;
-  const channelId = channelItem ? getString(channelItem, "id") : undefined;
-  if (!channelId) return undefined;
-  const searchUrl = new URL(`${youtubeApiBaseUrl}/search`);
-  searchUrl.searchParams.set("part", "id");
-  searchUrl.searchParams.set("channelId", channelId);
-  searchUrl.searchParams.set("eventType", "live");
-  searchUrl.searchParams.set("type", "video");
-  searchUrl.searchParams.set("maxResults", "1");
-  searchUrl.searchParams.set("key", apiKey);
-  const searchPayload = await fetchYouTubePayload(searchUrl, signal);
-  const searchItem = Array.isArray(searchPayload.items) && isRecord(searchPayload.items[0]) ? searchPayload.items[0] : undefined;
-  const videoId = searchItem && isRecord(searchItem.id) ? getString(searchItem.id, "videoId") : undefined;
-  return videoId ? fetchBroadcast(apiKey, videoId, signal) : undefined;
+  const uploadsPlaylistId = await fetchUploadsPlaylistId(apiKey, handle, signal);
+  if (!uploadsPlaylistId) return undefined;
+  const videoIds = await fetchRecentUploadIds(apiKey, uploadsPlaylistId, signal);
+  if (videoIds.length === 0) return undefined;
+  const items = await fetchVideoItems(apiKey, videoIds, signal);
+  // Only an open chat can be polled: YouTube drops activeLiveChatId as soon as a broadcast ends.
+  return items
+    .map((item) => toActiveBroadcast(item))
+    .find((broadcast) => broadcast?.state.status === "live" && broadcast.liveChatId !== undefined);
 }
 
 export interface ChannelStatistics {
